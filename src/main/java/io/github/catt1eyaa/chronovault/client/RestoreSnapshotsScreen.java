@@ -5,6 +5,7 @@ import io.github.catt1eyaa.Config;
 import io.github.catt1eyaa.chronovault.restore.RestoreExecutor;
 import io.github.catt1eyaa.chronovault.restore.RestoreResult;
 import io.github.catt1eyaa.chronovault.snapshot.Manifest;
+import io.github.catt1eyaa.chronovault.storage.BackupPathResolver;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -12,7 +13,6 @@ import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.ConfirmScreen;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
-import net.minecraft.world.level.storage.LevelResource;
 import net.minecraft.world.level.storage.LevelStorageSource;
 
 import java.io.IOException;
@@ -34,6 +34,8 @@ public class RestoreSnapshotsScreen extends Screen {
 
     private final Screen parent;
     private final LevelStorageSource.LevelStorageAccess levelAccess;
+    private final String worldName;
+    private final Path savesRoot;
     private final RestoreExecutor restoreExecutor;
     private final List<SnapshotView> snapshots;
 
@@ -45,8 +47,13 @@ public class RestoreSnapshotsScreen extends Screen {
         this.parent = parent;
         this.levelAccess = levelAccess;
 
-        Path backupDir = Minecraft.getInstance().gameDirectory.toPath().resolve(Config.getBackupPath()).normalize();
-        this.restoreExecutor = new RestoreExecutor(backupDir);
+        this.worldName = levelAccess.getLevelId();
+        this.savesRoot = Minecraft.getInstance().gameDirectory.toPath().resolve("saves").normalize();
+
+        Path backupRoot = Minecraft.getInstance().gameDirectory.toPath().resolve(Config.getBackupPath()).normalize();
+        Path worldBackupDir = BackupPathResolver.resolve(backupRoot, worldName);
+
+        this.restoreExecutor = new RestoreExecutor(worldBackupDir);
         this.snapshots = loadSnapshots();
         this.page = 0;
         this.statusMessage = Component.empty();
@@ -134,21 +141,16 @@ public class RestoreSnapshotsScreen extends Screen {
                     this.minecraft.setScreen(this);
                 },
                 Component.translatable("chrono_vault.restore.confirm_title"),
-                Component.translatable("chrono_vault.restore.confirm_message", snapshot.snapshotId())
+                Component.translatable("chrono_vault.restore.confirm_message_new_world", snapshot.snapshotId())
         ));
     }
 
     private void runRestore(String snapshotId) {
         try {
-            Path savesDir = Minecraft.getInstance().gameDirectory.toPath().resolve("saves").normalize();
-            String worldName = levelAccess.getLevelId();
-            RestoreResult result = restoreExecutor.restoreToNewWorld(snapshotId, savesDir, worldName);
+            RestoreResult result = restoreExecutor.restoreToNewWorld(snapshotId, savesRoot, worldName);
             this.statusMessage = Component.translatable(
-                    "chrono_vault.restore.success_new_world",
-                    result.targetWorldName(),
-                    result.restoredFiles(),
-                    result.restoredRegions(),
-                    result.restoredChunks()
+                    "chrono_vault.restore.new_world_created",
+                    result.targetWorldName()
             );
         } catch (IOException e) {
             ChronoVault.LOGGER.error("Failed to restore snapshot {}", snapshotId, e);
