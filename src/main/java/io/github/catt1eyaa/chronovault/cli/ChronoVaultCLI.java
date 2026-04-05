@@ -3,6 +3,7 @@ package io.github.catt1eyaa.chronovault.cli;
 import io.github.catt1eyaa.chronovault.restore.RestoreExecutor;
 import io.github.catt1eyaa.chronovault.restore.RestoreResult;
 import io.github.catt1eyaa.chronovault.snapshot.Manifest;
+import io.github.catt1eyaa.chronovault.storage.BackupPathResolver;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -19,8 +20,8 @@ import java.util.List;
  *
  * <p>使用方法：
  * <pre>
- * java -jar chronovault-restore.jar list &lt;backup_dir&gt;
- * java -jar chronovault-restore.jar restore &lt;backup_dir&gt; &lt;snapshot_id&gt; &lt;world_dir&gt;
+ * java -jar chronovault-restore.jar list &lt;backup_root&gt; &lt;world_name&gt;
+ * java -jar chronovault-restore.jar restore &lt;backup_root&gt; &lt;world_name&gt; &lt;snapshot_id&gt; &lt;saves_root&gt;
  * </pre>
  */
 public class ChronoVaultCLI {
@@ -60,21 +61,29 @@ public class ChronoVaultCLI {
     }
 
     private static void executeList(String[] args) throws IOException {
-        if (args.length < 2) {
-            System.err.println("Usage: list <backup_dir>");
+        if (args.length < 3) {
+            System.err.println("Usage: list <backup_root> <world_name>");
             System.exit(1);
         }
 
-        Path backupDir = validatePath(args[1], "backup directory");
-        RestoreExecutor executor = new RestoreExecutor(backupDir);
+        Path backupRoot = validatePath(args[1], "backup root directory");
+        String worldName = args[2];
+        Path worldBackupDir = BackupPathResolver.resolve(backupRoot, worldName);
 
-        List<String> snapshots = executor.listSnapshots();
-        if (snapshots.isEmpty()) {
-            System.out.println("No snapshots found in " + backupDir);
+        if (!Files.exists(worldBackupDir)) {
+            System.out.println("No backups found for world '" + worldName + "' in " + backupRoot);
             return;
         }
 
-        System.out.println("Available snapshots in " + backupDir + ":");
+        RestoreExecutor executor = new RestoreExecutor(worldBackupDir);
+
+        List<String> snapshots = executor.listSnapshots();
+        if (snapshots.isEmpty()) {
+            System.out.println("No snapshots found for world '" + worldName + "'");
+            return;
+        }
+
+        System.out.println("Available snapshots for world '" + worldName + "':");
         System.out.println();
 
         for (String snapshotId : snapshots) {
@@ -101,18 +110,22 @@ public class ChronoVaultCLI {
 
     private static void executeRestore(String[] args) throws IOException {
         if (args.length < 5) {
-            System.err.println("Usage: restore <backup_dir> <snapshot_id> <saves_dir> <world_name>");
+            System.err.println("Usage: restore <backup_root> <world_name> <snapshot_id> <saves_root>");
             System.exit(1);
         }
 
-        Path backupDir = validatePath(args[1], "backup directory");
-        String snapshotId = args[2];
-        Path savesDir = parsePath(args[3], "saves directory");
-        String worldName = args[4];
+        Path backupRoot = validatePath(args[1], "backup root directory");
+        String worldName = args[2];
+        String snapshotId = args[3];
+        Path savesRoot = parsePath(args[4], "saves root directory");
 
-        RestoreExecutor executor = new RestoreExecutor(backupDir);
+        Path worldBackupDir = BackupPathResolver.resolve(backupRoot, worldName);
+        if (!Files.exists(worldBackupDir)) {
+            throw new IOException("No backups found for world '" + worldName + "' in " + backupRoot);
+        }
 
-        // 验证快照存在
+        RestoreExecutor executor = new RestoreExecutor(worldBackupDir);
+
         Manifest manifest = executor.loadManifest(snapshotId);
         System.out.println("Snapshot Info:");
         System.out.printf("  ID: %s%n", manifest.snapshotId());
@@ -124,19 +137,18 @@ public class ChronoVaultCLI {
         System.out.println("Starting restore to new world...");
         long startTime = System.currentTimeMillis();
 
-        RestoreResult result = executor.restoreToNewWorld(snapshotId, savesDir, worldName);
+        RestoreResult result = executor.restoreToNewWorld(snapshotId, savesRoot, worldName);
 
         long duration = System.currentTimeMillis() - startTime;
 
         System.out.println();
         System.out.println("Restore completed successfully!");
+        System.out.printf("  New world: %s%n", result.targetWorldName());
+        System.out.printf("  Path: %s%n", result.targetWorldPath());
         System.out.printf("  Files restored: %d%n", result.restoredFiles());
         System.out.printf("  Regions restored: %d%n", result.restoredRegions());
         System.out.printf("  Chunks restored: %d%n", result.restoredChunks());
         System.out.printf("  Duration: %.2f seconds%n", duration / 1000.0);
-        System.out.println();
-        System.out.println("New world created: " + result.targetWorldName());
-        System.out.println("World path: " + result.targetWorldPath());
     }
 
     private static Path parsePath(String pathStr, String description) {
@@ -173,22 +185,26 @@ public class ChronoVaultCLI {
         System.out.println("ChronoVault Restore Tool");
         System.out.println();
         System.out.println("Usage:");
-        System.out.println("  java -jar chronovault-restore.jar list <backup_dir>");
-        System.out.println("  java -jar chronovault-restore.jar restore <backup_dir> <snapshot_id> <world_dir>");
+        System.out.println("  java -jar chronovault-restore.jar list <backup_root> <world_name>");
+        System.out.println("  java -jar chronovault-restore.jar restore <backup_root> <world_name> <snapshot_id> <saves_root>");
         System.out.println();
         System.out.println("Commands:");
-        System.out.println("  list      List all available snapshots in backup directory");
-        System.out.println("  restore   Restore a snapshot to world directory");
+        System.out.println("  list      List all available snapshots for a world");
+        System.out.println("  restore   Restore a snapshot (creates a new world, never overwrites)");
         System.out.println("  help      Show this help message");
         System.out.println();
         System.out.println("Arguments:");
-        System.out.println("  backup_dir    Path to ChronoVault backup directory (contains objects/ and snapshots/)");
+        System.out.println("  backup_root   Path to ChronoVault backup root (contains world-named subdirectories)");
+        System.out.println("  world_name    World folder name to list/restore from");
         System.out.println("  snapshot_id   Snapshot ID to restore (from list command)");
-        System.out.println("  world_dir     Target Minecraft world directory (will be overwritten)");
+        System.out.println("  saves_root    Target saves directory (new world will be created here)");
         System.out.println();
         System.out.println("Examples:");
-        System.out.println("  java -jar chronovault-restore.jar list /server/backups");
-        System.out.println("  java -jar chronovault-restore.jar restore /server/backups 20260405_120000 /server/world");
+        System.out.println("  java -jar chronovault-restore.jar list /server/backups MyWorld");
+        System.out.println("  java -jar chronovault-restore.jar restore /server/backups MyWorld 20260405_120000 /server/saves");
+        System.out.println();
+        System.out.println("The restore command always creates a new world named:");
+        System.out.println("  <world_name>-restored-<snapshot_id>");
         System.exit(0);
     }
 }

@@ -2,7 +2,6 @@ package io.github.catt1eyaa.chronovault.cli;
 
 import io.github.catt1eyaa.chronovault.backup.BackupExecutor;
 import io.github.catt1eyaa.chronovault.backup.BackupResult;
-import io.github.catt1eyaa.chronovault.restore.RestoreExecutor;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -21,113 +20,127 @@ class ChronoVaultCLITest {
 
     @Test
     void testListAndRestoreIntegration(@TempDir Path tempDir) throws IOException {
-        Path backupDir = tempDir.resolve("backup");
-        Path worldDir = tempDir.resolve("world");
-        Path restoreDir = tempDir.resolve("restored");
-
-        // 创建世界数据
-        Files.createDirectories(worldDir);
-        String testData = "test world content";
-        Files.writeString(worldDir.resolve("level.dat"), testData);
-
-        // 执行备份
-        BackupExecutor backupExecutor = new BackupExecutor(backupDir, 3);
-        BackupResult backupResult = backupExecutor.execute(worldDir, "1.21.1", "Integration Test");
-        assertTrue(backupResult.success());
-        assertNotNull(backupResult.snapshotId());
-
-        // 使用 RestoreExecutor 验证快照可以列出
-        RestoreExecutor restoreExecutor = new RestoreExecutor(backupDir);
-        var snapshots = restoreExecutor.listSnapshots();
-        assertEquals(1, snapshots.size());
-        assertEquals(backupResult.snapshotId(), snapshots.get(0));
-
-        // 使用 RestoreExecutor 恢复到新世界
         Path savesDir = tempDir.resolve("saves");
-        Files.createDirectories(savesDir);
-        var result = restoreExecutor.restoreToNewWorld(backupResult.snapshotId(), savesDir, "TestWorld");
-        assertEquals(backupResult.snapshotId(), result.snapshotId());
-        assertEquals(1, result.restoredFiles());
-        assertEquals("TestWorld-restored-" + backupResult.snapshotId(), result.targetWorldName());
+        Path sourceWorld = savesDir.resolve("TestWorld");
+        Files.createDirectories(sourceWorld);
+        Files.writeString(sourceWorld.resolve("level.dat"), "test-data");
 
-        // 验证恢复的数据
-        assertTrue(Files.exists(result.targetWorldPath().resolve("level.dat")));
-        String restoredData = Files.readString(result.targetWorldPath().resolve("level.dat"));
-        assertEquals(testData, restoredData);
-    }
-
-    @Test
-    void testCLIListCommand(@TempDir Path tempDir) throws IOException {
-        Path backupDir = tempDir.resolve("backup");
-        Path worldDir = tempDir.resolve("world");
-
-        // 创建简单世界数据
-        Files.createDirectories(worldDir);
-        Files.writeString(worldDir.resolve("level.dat"), "test world data");
-
-        // 执行备份创建快照
-        BackupExecutor executor = new BackupExecutor(backupDir, 3);
-        BackupResult result = executor.execute(worldDir, "1.21.1", "Test Snapshot");
+        Path backupRoot = tempDir.resolve("backups");
+        Path worldBackupDir = backupRoot.resolve("TestWorld");
+        BackupExecutor backupExecutor = new BackupExecutor(worldBackupDir);
+        BackupResult result = backupExecutor.execute(sourceWorld, "1.21.1", "CLI test backup");
         assertTrue(result.success());
 
-        // 测试 list 命令 - 捕获输出
-        ByteArrayOutputStream outContent = new ByteArrayOutputStream();
+        ByteArrayOutputStream listOutput = new ByteArrayOutputStream();
         PrintStream originalOut = System.out;
-        System.setOut(new PrintStream(outContent));
+        System.setOut(new PrintStream(listOutput));
 
         try {
-            ChronoVaultCLI.main(new String[]{"list", backupDir.toString()});
-        } catch (Exception e) {
-            // Ignore any exceptions from System.exit() calls
+            ChronoVaultCLI.main(new String[]{"list", backupRoot.toString(), "TestWorld"});
         } finally {
             System.setOut(originalOut);
         }
 
-        String output = outContent.toString();
-        assertTrue(output.contains("Available snapshots") || output.contains(result.snapshotId()));
-    }
+        String listResult = listOutput.toString();
+        assertTrue(listResult.contains(result.snapshotId()));
+        assertTrue(listResult.contains("CLI test backup"));
 
-    @Test
-    void testCLIRestoreCommand(@TempDir Path tempDir) throws IOException {
-        Path backupDir = tempDir.resolve("backup");
-        Path worldDir = tempDir.resolve("world");
-        Path restoreDir = tempDir.resolve("restored");
-
-        // 创建世界数据
-        Files.createDirectories(worldDir);
-        String testData = "cli restore test";
-        Files.writeString(worldDir.resolve("level.dat"), testData);
-
-        // 执行备份
-        BackupExecutor backupExecutor = new BackupExecutor(backupDir, 3);
-        BackupResult backupResult = backupExecutor.execute(worldDir, "1.21.1", "CLI Restore Test");
-        assertTrue(backupResult.success());
-
-        // 测试 restore 命令
-        ByteArrayOutputStream outContent = new ByteArrayOutputStream();
-        PrintStream originalOut = System.out;
-        System.setOut(new PrintStream(outContent));
+        ByteArrayOutputStream restoreOutput = new ByteArrayOutputStream();
+        System.setOut(new PrintStream(restoreOutput));
 
         try {
             ChronoVaultCLI.main(new String[]{
                 "restore",
-                backupDir.toString(),
-                backupResult.snapshotId(),
-                restoreDir.toString()
+                backupRoot.toString(),
+                "TestWorld",
+                result.snapshotId(),
+                savesDir.toString()
             });
-        } catch (Exception e) {
-            // Ignore any exceptions from System.exit() calls
         } finally {
             System.setOut(originalOut);
         }
 
-        String output = outContent.toString();
-        assertTrue(output.contains("Restore completed successfully") || 
-                   output.contains("Files restored"));
+        String restoreResult = restoreOutput.toString();
+        assertTrue(restoreResult.contains("Restore completed successfully"));
+        assertTrue(restoreResult.contains("TestWorld-restored-" + result.snapshotId()));
 
-        // 验证恢复的数据
-        assertTrue(Files.exists(restoreDir.resolve("level.dat")));
-        String restoredData = Files.readString(restoreDir.resolve("level.dat"));
-        assertEquals(testData, restoredData);
+        Path expectedNewWorld = savesDir.resolve("TestWorld-restored-" + result.snapshotId());
+        assertTrue(Files.exists(expectedNewWorld));
+        assertTrue(Files.exists(expectedNewWorld.resolve("level.dat")));
+        assertEquals("test-data", Files.readString(expectedNewWorld.resolve("level.dat")));
+
+        assertEquals("test-data", Files.readString(sourceWorld.resolve("level.dat")));
+    }
+
+    @Test
+    void testListCommandShowsWorldSnapshots(@TempDir Path tempDir) throws IOException {
+        Path savesRoot = tempDir.resolve("saves");
+        Path world1 = savesRoot.resolve("World1");
+        Path world2 = savesRoot.resolve("World2");
+        Files.createDirectories(world1);
+        Files.createDirectories(world2);
+        Files.writeString(world1.resolve("level.dat"), "world1");
+        Files.writeString(world2.resolve("level.dat"), "world2");
+
+        Path backupRoot = tempDir.resolve("backups");
+
+        BackupExecutor executor1 = new BackupExecutor(backupRoot.resolve("World1"));
+        BackupResult result1 = executor1.execute(world1, "1.21.1", "World1 backup");
+        assertTrue(result1.success());
+
+        BackupExecutor executor2 = new BackupExecutor(backupRoot.resolve("World2"));
+        BackupResult result2 = executor2.execute(world2, "1.21.1", "World2 backup");
+        assertTrue(result2.success());
+
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        PrintStream originalOut = System.out;
+        System.setOut(new PrintStream(output));
+
+        try {
+            ChronoVaultCLI.main(new String[]{"list", backupRoot.toString(), "World1"});
+        } finally {
+            System.setOut(originalOut);
+        }
+
+        String listResult = output.toString();
+        assertTrue(listResult.contains("World1 backup"));
+        assertFalse(listResult.contains("World2 backup"));
+    }
+
+    @Test
+    void testRestoreCreatesNewWorld(@TempDir Path tempDir) throws IOException {
+        Path savesRoot = tempDir.resolve("saves");
+        Path sourceWorld = savesRoot.resolve("OriginalWorld");
+        Files.createDirectories(sourceWorld);
+        Files.writeString(sourceWorld.resolve("level.dat"), "original-data");
+
+        Path backupRoot = tempDir.resolve("backups");
+        BackupExecutor backupExecutor = new BackupExecutor(backupRoot.resolve("OriginalWorld"));
+        BackupResult result = backupExecutor.execute(sourceWorld, "1.21.1", "test");
+        assertTrue(result.success());
+
+        Files.writeString(sourceWorld.resolve("level.dat"), "modified-data");
+
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        PrintStream originalOut = System.out;
+        System.setOut(new PrintStream(output));
+
+        try {
+            ChronoVaultCLI.main(new String[]{
+                "restore",
+                backupRoot.toString(),
+                "OriginalWorld",
+                result.snapshotId(),
+                savesRoot.toString()
+            });
+        } finally {
+            System.setOut(originalOut);
+        }
+
+        Path newWorld = savesRoot.resolve("OriginalWorld-restored-" + result.snapshotId());
+        assertTrue(Files.exists(newWorld));
+        assertEquals("original-data", Files.readString(newWorld.resolve("level.dat")));
+
+        assertEquals("modified-data", Files.readString(sourceWorld.resolve("level.dat")));
     }
 }
