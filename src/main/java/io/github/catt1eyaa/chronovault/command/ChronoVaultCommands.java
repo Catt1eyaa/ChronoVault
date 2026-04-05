@@ -1,5 +1,8 @@
 package io.github.catt1eyaa.chronovault.command;
 
+import java.nio.file.Path;
+import java.util.concurrent.CompletableFuture;
+
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
@@ -7,14 +10,12 @@ import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import io.github.catt1eyaa.chronovault.backup.AsyncBackupService;
 import io.github.catt1eyaa.chronovault.backup.BackupResult;
 import io.github.catt1eyaa.chronovault.storage.BackupPathResolver;
+import io.github.catt1eyaa.chronovault.util.CompressionUtil;
 
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.level.storage.LevelResource;
-
-import java.nio.file.Path;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * ChronoVault 命令注册器
@@ -34,15 +35,13 @@ public class ChronoVaultCommands {
 
     private static final String COMMAND_NAME = "chronovault";
 
-    private AsyncBackupService backupService;
-    private Path backupRoot;
-    private int compressionLevel;
+    private volatile AsyncBackupService backupService;
+    private volatile Path backupRoot;
+    private volatile int compressionLevel;
+    private final Object backupServiceLock = new Object();
 
     /**
-     * 创建命令注册器
-     *
-     * @param backupRoot 备份根目录
-     * @param compressionLevel 压缩级别
+     * 创建命令注册器。
      */
     public ChronoVaultCommands() {
     }
@@ -83,25 +82,47 @@ public class ChronoVaultCommands {
     }
 
     /**
-     * 初始化备份服务（服务器启动时调用）
+     * 初始化备份服务（服务器启动时调用）。
+     *
+     * @param backupRoot 备份根目录
+     * @param compressionLevel 压缩级别
      */
     public void initBackupService(Path backupRoot, int compressionLevel) {
+        if (backupRoot == null) {
+            throw new IllegalArgumentException("backupRoot 不能为 null");
+        }
+        if (!CompressionUtil.isValidLevel(compressionLevel)) {
+            throw new IllegalArgumentException("compressionLevel 无效: " + compressionLevel);
+        }
+
+        synchronized (backupServiceLock) {
+            if (backupService != null) {
+                backupService.close();
+                backupService = null;
+            }
+        }
+
         this.backupRoot = backupRoot;
         this.compressionLevel = compressionLevel;
     }
 
     /**
-     * 关闭备份服务（服务器关闭时调用）
+     * 关闭备份服务（服务器关闭时调用）。
      */
     public void shutdownBackupService() {
-        if (backupService != null) {
-            backupService.close();
-            backupService = null;
+        synchronized (backupServiceLock) {
+            if (backupService != null) {
+                backupService.close();
+                backupService = null;
+            }
         }
     }
 
     /**
-     * 获取当前世界的备份目录
+     * 获取当前世界的备份目录。
+     *
+     * @param source 命令源
+     * @return 当前世界的备份目录
      */
     private Path getWorldBackupDir(CommandSourceStack source) {
         Path worldPath = source.getServer().getWorldPath(LevelResource.ROOT);
@@ -110,20 +131,28 @@ public class ChronoVaultCommands {
     }
 
     /**
-     * 获取或创建当前世界的备份服务
+     * 获取或创建当前世界的备份服务。
+     *
+     * @param source 命令源
+     * @return 备份服务
      */
     private AsyncBackupService getOrCreateBackupService(CommandSourceStack source) {
         Path worldBackupDir = getWorldBackupDir(source);
-        
-        // 如果服务不存在或指向不同的世界，重新创建
-        if (backupService == null) {
-            backupService = new AsyncBackupService(worldBackupDir, compressionLevel);
+
+        synchronized (backupServiceLock) {
+            if (backupService == null) {
+                backupService = new AsyncBackupService(worldBackupDir, compressionLevel);
+            }
+            return backupService;
         }
-        return backupService;
     }
 
     /**
-     * 执行备份命令
+     * 执行备份命令。
+     *
+     * @param source 命令源
+     * @param description 备份描述
+     * @return 命令结果
      */
     private int executeBackup(CommandSourceStack source, String description) {
         if (backupRoot == null) {
@@ -150,10 +179,10 @@ public class ChronoVaultCommands {
                 desc,
                 (current, total, file) -> {
                     if (current % 10 == 0 || current == total) {
-                        source.sendSuccess(
+                        source.getServer().execute(() -> source.sendSuccess(
                                 () -> Component.literal(String.format("进度: %d/%d - %s", current, total, file)),
                                 false
-                        );
+                        ));
                     }
                 }
         );
@@ -187,7 +216,10 @@ public class ChronoVaultCommands {
     }
 
     /**
-     * 执行列表命令
+     * 执行列表命令。
+     *
+     * @param source 命令源
+     * @return 命令结果
      */
     private int executeList(CommandSourceStack source) {
         if (backupRoot == null) {
@@ -199,7 +231,11 @@ public class ChronoVaultCommands {
     }
 
     /**
-     * 执行信息命令
+     * 执行信息命令。
+     *
+     * @param source 命令源
+     * @param snapshotId 快照 ID
+     * @return 命令结果
      */
     private int executeInfo(CommandSourceStack source, String snapshotId) {
         if (backupRoot == null) {
