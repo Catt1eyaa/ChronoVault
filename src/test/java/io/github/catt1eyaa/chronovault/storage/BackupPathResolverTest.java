@@ -30,7 +30,7 @@ class BackupPathResolverTest {
     void testSanitizeNameWithIllegalChars() {
         assertEquals("My_World_Test", BackupPathResolver.sanitizeWorldName("My<World>Test"));
         assertEquals("path_to_world", BackupPathResolver.sanitizeWorldName("path/to\\world"));
-        assertEquals("world_v1_0", BackupPathResolver.sanitizeWorldName("world:v1.0"));
+        assertEquals("world_v1.0", BackupPathResolver.sanitizeWorldName("world:v1.0"));
     }
 
     @Test
