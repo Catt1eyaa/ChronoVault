@@ -30,13 +30,12 @@ public class AutoBackupScheduler {
 
     private static final Logger LOGGER = Logger.getLogger(AutoBackupScheduler.class.getName());
 
-    private final ScheduledExecutorService scheduler;
     private final MinecraftServer server;
     private final Path backupRoot;
-    private final Path worldDir;
     private final int intervalMinutes;
     private final int compressionLevel;
 
+    private ScheduledExecutorService scheduler;
     private ScheduledFuture<?> scheduledTask;
     private final AtomicBoolean running = new AtomicBoolean(false);
 
@@ -56,12 +55,6 @@ public class AutoBackupScheduler {
         }
         this.intervalMinutes = intervalMinutes;
         this.compressionLevel = compressionLevel;
-        this.worldDir = server.getWorldPath(LevelResource.ROOT);
-        this.scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
-            Thread t = new Thread(r, "ChronoVault-AutoBackup");
-            t.setDaemon(true);
-            return t;
-        });
     }
 
     /**
@@ -72,6 +65,17 @@ public class AutoBackupScheduler {
             LOGGER.warning("AutoBackupScheduler is already running");
             return;
         }
+
+        if (scheduler != null && !scheduler.isShutdown()) {
+            LOGGER.warning("AutoBackupScheduler scheduler already initialized");
+            return;
+        }
+
+        scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread t = new Thread(r, "ChronoVault-AutoBackup");
+            t.setDaemon(true);
+            return t;
+        });
 
         LOGGER.info(() -> String.format("Scheduling automatic backups every %d minutes", intervalMinutes));
 
@@ -94,6 +98,20 @@ public class AutoBackupScheduler {
 
         if (scheduledTask != null) {
             scheduledTask.cancel(false);
+            scheduledTask = null;
+        }
+
+        if (scheduler != null) {
+            scheduler.shutdown();
+            try {
+                if (!scheduler.awaitTermination(30, TimeUnit.SECONDS)) {
+                    scheduler.shutdownNow();
+                }
+            } catch (InterruptedException e) {
+                scheduler.shutdownNow();
+                Thread.currentThread().interrupt();
+            }
+            scheduler = null;
         }
 
         LOGGER.info("Auto backup scheduler stopped");
@@ -110,6 +128,15 @@ public class AutoBackupScheduler {
         try {
             LOGGER.info("Starting automatic backup...");
 
+            server.executeBlocking(() -> {
+                try {
+                    server.saveEverything(true, false, true);
+                } catch (Exception e) {
+                    LOGGER.log(Level.SEVERE, "Auto backup pre-save failed", e);
+                }
+            });
+
+            Path worldDir = server.getWorldPath(LevelResource.ROOT);
             Path worldBackupDir = resolveWorldBackupDir(backupRoot, worldDir);
             BackupExecutor backupExecutor = new BackupExecutor(worldBackupDir, compressionLevel);
 
