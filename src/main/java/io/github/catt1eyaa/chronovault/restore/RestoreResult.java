@@ -21,23 +21,26 @@ public record RestoreResult(
     Path targetWorldPath
 ) {
     /**
-     * 创建恢复结果（兼容旧签名，内部使用）。
+     * 紧凑构造器 - 参数验证。
      */
-    public static RestoreResult of(
-        String snapshotId,
-        int restoredFiles,
-        int restoredRegions,
-        int restoredChunks,
-        String targetWorldName,
-        Path targetWorldPath
-    ) {
-        return new RestoreResult(
-            snapshotId,
-            restoredFiles,
-            restoredRegions,
-            restoredChunks,
-            targetWorldName,
-            targetWorldPath
-        );
+    public RestoreResult {
+        if (snapshotId == null || snapshotId.isEmpty()) {
+            throw new IllegalArgumentException("snapshotId 不能为 null 或空字符串");
+        }
+        if (restoredFiles < 0) {
+            throw new IllegalArgumentException("restoredFiles 不能为负数: " + restoredFiles);
+        }
+        if (restoredRegions < 0) {
+            throw new IllegalArgumentException("restoredRegions 不能为负数: " + restoredRegions);
+        }
+        if (restoredChunks < 0) {
+            throw new IllegalArgumentException("restoredChunks 不能为负数: " + restoredChunks);
+        }
+        if (targetWorldName == null || targetWorldName.isEmpty()) {
+            throw new IllegalArgumentException("targetWorldName 不能为 null 或空字符串");
+        }
+        if (targetWorldPath == null) {
+            throw new IllegalArgumentException("targetWorldPath 不能为 null");
+        }
     }
 }
