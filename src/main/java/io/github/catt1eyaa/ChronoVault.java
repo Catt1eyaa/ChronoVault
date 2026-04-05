@@ -43,16 +43,16 @@ public class ChronoVault {
 
     @SubscribeEvent
     public void onServerStarting(ServerStartingEvent event) {
-        Path backupDir = Path.of(Config.getBackupPath());
+        Path backupRoot = Path.of(Config.getBackupPath());
         int compressionLevel = Config.getCompressionLevel();
 
-        commands.initBackupService(backupDir, compressionLevel);
+        commands.initBackupService(backupRoot, compressionLevel);
         LOGGER.info("ChronoVault backup service initialized");
 
         if (Config.isAutoBackupEnabled()) {
             autoBackupScheduler = new AutoBackupScheduler(
                     event.getServer(),
-                    backupDir,
+                    backupRoot,
                     Config.getAutoBackupIntervalMinutes(),
                     compressionLevel
             );
