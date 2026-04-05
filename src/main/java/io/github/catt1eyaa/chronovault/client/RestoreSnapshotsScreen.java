@@ -152,6 +152,9 @@ public class RestoreSnapshotsScreen extends Screen {
                     "chrono_vault.restore.new_world_created",
                     result.targetWorldName()
             );
+        } catch (IllegalArgumentException e) {
+            ChronoVault.LOGGER.error("Invalid restore arguments for snapshot {}", snapshotId, e);
+            this.statusMessage = Component.translatable("chrono_vault.restore.failed", snapshotId, "invalid restore arguments");
         } catch (IOException e) {
             ChronoVault.LOGGER.error("Failed to restore snapshot {}", snapshotId, e);
             this.statusMessage = Component.translatable("chrono_vault.restore.failed", snapshotId, e.getMessage());
@@ -173,6 +176,9 @@ public class RestoreSnapshotsScreen extends Screen {
             }
             views.sort(Comparator.comparing(SnapshotView::snapshotId).reversed());
             return views;
+        } catch (IllegalArgumentException e) {
+            ChronoVault.LOGGER.error("Invalid snapshot metadata while loading restore list", e);
+            return List.of();
         } catch (IOException e) {
             ChronoVault.LOGGER.error("Failed to load snapshots", e);
             return List.of();
