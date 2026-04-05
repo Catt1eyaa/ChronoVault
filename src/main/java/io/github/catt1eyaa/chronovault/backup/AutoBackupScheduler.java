@@ -14,6 +14,7 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.level.storage.LevelResource;
 
 import io.github.catt1eyaa.chronovault.storage.BackupPathResolver;
+import io.github.catt1eyaa.chronovault.util.CompressionUtil;
 
 /**
  * 自动备份调度器
@@ -22,7 +23,7 @@ import io.github.catt1eyaa.chronovault.storage.BackupPathResolver;
  *
  * <p>生命周期：</p>
  * <ul>
- *   <li>服务器启动时调用 {@link #start(MinecraftServer)} 开始调度</li>
+ *   <li>服务器启动时调用 {@link #start()} 开始调度</li>
  *   <li>服务器关闭时调用 {@link #stop()} 停止调度</li>
  * </ul>
  */
@@ -52,6 +53,9 @@ public class AutoBackupScheduler {
         this.backupRoot = Objects.requireNonNull(backupRoot, "backupRoot cannot be null");
         if (intervalMinutes < 1) {
             throw new IllegalArgumentException("intervalMinutes must be >= 1");
+        }
+        if (!CompressionUtil.isValidLevel(compressionLevel)) {
+            throw new IllegalArgumentException("Invalid compression level: " + compressionLevel);
         }
         this.intervalMinutes = intervalMinutes;
         this.compressionLevel = compressionLevel;
@@ -97,7 +101,7 @@ public class AutoBackupScheduler {
         }
 
         if (scheduledTask != null) {
-            scheduledTask.cancel(false);
+            scheduledTask.cancel(true);
             scheduledTask = null;
         }
 
@@ -128,7 +132,7 @@ public class AutoBackupScheduler {
         try {
             LOGGER.info("Starting automatic backup...");
 
-            server.executeBlocking(() -> {
+            server.execute(() -> {
                 try {
                     server.saveEverything(true, false, true);
                 } catch (Exception e) {
