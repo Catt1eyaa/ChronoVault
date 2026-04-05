@@ -5,6 +5,9 @@ import io.github.catt1eyaa.chronovault.backup.BackupResult;
 import io.github.catt1eyaa.chronovault.region.AnvilReader;
 import io.github.catt1eyaa.chronovault.region.AnvilWriter;
 import io.github.catt1eyaa.chronovault.region.ChunkData;
+import io.github.catt1eyaa.chronovault.snapshot.Manifest;
+import io.github.catt1eyaa.chronovault.snapshot.ManifestSerializer;
+import io.github.catt1eyaa.chronovault.snapshot.RegionEntry;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -14,6 +17,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -132,6 +136,37 @@ class RestoreExecutorTest {
         assertChunkPayloadEquals(restoreResult.targetWorldPath().resolve("region").resolve("r.0.0.mca"), "region-chunk");
         assertChunkPayloadEquals(restoreResult.targetWorldPath().resolve("entities").resolve("r.0.0.mca"), "entities-chunk");
         assertChunkPayloadEquals(restoreResult.targetWorldPath().resolve("poi").resolve("r.0.0.mca"), "poi-chunk");
+    }
+
+    @Test
+    void testRestoreKeepsZeroByteRegionAsZeroByte(@TempDir Path tempDir) throws IOException {
+        Path backupDir = tempDir.resolve("backups").resolve("TestWorld");
+        Path snapshotsDir = backupDir.resolve("snapshots");
+        Files.createDirectories(snapshotsDir);
+
+        String snapshotId = "20260406_101010";
+        Manifest manifest = new Manifest(
+            snapshotId,
+            1_712_000_000L,
+            "1.21.1",
+            "zero-byte restore",
+            Map.of(),
+            Map.of("overworld", Map.of(
+                "region/r.0.-1.mca",
+                new RegionEntry("region/r.0.-1.mca", "anvil-zero-byte", List.of())
+            ))
+        );
+        ManifestSerializer.save(manifest, snapshotsDir.resolve(snapshotId + ".json"));
+
+        Path savesRoot = tempDir.resolve("saves");
+        Files.createDirectories(savesRoot);
+
+        RestoreExecutor restoreExecutor = new RestoreExecutor(backupDir);
+        RestoreResult result = restoreExecutor.restoreToNewWorld(snapshotId, savesRoot, "TestWorld");
+
+        Path restoredRegion = result.targetWorldPath().resolve("region").resolve("r.0.-1.mca");
+        assertTrue(Files.exists(restoredRegion));
+        assertEquals(0L, Files.size(restoredRegion));
     }
 
     @Test

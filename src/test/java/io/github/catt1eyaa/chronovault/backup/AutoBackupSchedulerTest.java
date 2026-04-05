@@ -7,6 +7,7 @@ import java.nio.file.Path;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * AutoBackupScheduler 测试。
@@ -33,5 +34,16 @@ class AutoBackupSchedulerTest {
     void testResolveWorldBackupDirRejectsPathWithoutFileName(@TempDir Path tempDir) {
         Path backupRoot = tempDir.resolve("backups");
         assertThrows(IllegalArgumentException.class, () -> AutoBackupScheduler.resolveWorldBackupDir(backupRoot, Path.of("/")));
+    }
+
+    @Test
+    void testResolveWorldBackupDirUsesFolderNameNotDisplayName(@TempDir Path tempDir) {
+        Path backupRoot = tempDir.resolve("backups");
+        Path worldDir = tempDir.resolve("saves").resolve("test");
+
+        Path resolved = AutoBackupScheduler.resolveWorldBackupDir(backupRoot, worldDir);
+
+        assertEquals(backupRoot.resolve("test"), resolved);
+        assertTrue(resolved.startsWith(backupRoot));
     }
 }

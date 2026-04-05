@@ -2,6 +2,7 @@ package io.github.catt1eyaa.chronovault.command;
 
 import java.nio.file.Path;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.StringArgumentType;
@@ -39,6 +40,7 @@ public class ChronoVaultCommands {
     private volatile Path backupRoot;
     private volatile int compressionLevel;
     private final Object backupServiceLock = new Object();
+    private final AtomicBoolean backupInProgress = new AtomicBoolean(false);
 
     /**
      * 创建命令注册器。
@@ -125,9 +127,18 @@ public class ChronoVaultCommands {
      * @return 当前世界的备份目录
      */
     private Path getWorldBackupDir(CommandSourceStack source) {
-        Path worldPath = source.getServer().getWorldPath(LevelResource.ROOT);
+        Path worldPath = resolveCurrentWorldDir(source);
         String worldName = worldPath.getFileName().toString();
         return BackupPathResolver.resolve(backupRoot, worldName);
+    }
+
+    private Path resolveCurrentWorldDir(CommandSourceStack source) {
+        Path levelDatPath = source.getServer().getWorldPath(LevelResource.LEVEL_DATA_FILE);
+        Path worldDir = levelDatPath.getParent();
+        if (worldDir == null || worldDir.getFileName() == null) {
+            throw new IllegalStateException("Unable to resolve current world directory from level.dat path: " + levelDatPath);
+        }
+        return worldDir;
     }
 
     /**
@@ -160,9 +171,18 @@ public class ChronoVaultCommands {
             return 0;
         }
 
+        if (!backupInProgress.compareAndSet(false, true)) {
+            source.sendFailure(Component.literal("已有备份任务正在进行，请稍后重试"));
+            return 0;
+        }
+
+        Path worldDir;
+
         try {
-            source.getServer().executeBlocking(() -> source.getServer().saveEverything(true, false, true));
+            worldDir = resolveCurrentWorldDir(source);
+            prepareBackupWindow(source);
         } catch (Exception e) {
+            backupInProgress.set(false);
             source.sendFailure(Component.literal("备份前保存失败: " + e.getMessage()));
             return 0;
         }
@@ -172,22 +192,41 @@ public class ChronoVaultCommands {
         source.sendSuccess(() -> Component.literal(backupMessage), true);
 
         AsyncBackupService service = getOrCreateBackupService(source);
-        
-        CompletableFuture<BackupResult> future = service.backupAsync(
-                source.getServer().getWorldPath(LevelResource.ROOT),
-                source.getServer().getServerVersion(),
-                desc,
-                (current, total, file) -> {
-                    if (current % 10 == 0 || current == total) {
-                        source.getServer().execute(() -> source.sendSuccess(
-                                () -> Component.literal(String.format("进度: %d/%d - %s", current, total, file)),
-                                false
-                        ));
+        CompletableFuture<BackupResult> future;
+        try {
+            future = service.backupAsync(
+                    worldDir,
+                    source.getServer().getServerVersion(),
+                    desc,
+                    (current, total, file) -> {
+                        if (current % 10 == 0 || current == total) {
+                            source.getServer().execute(() -> source.sendSuccess(
+                                    () -> Component.literal(String.format("进度: %d/%d - %s", current, total, file)),
+                                    false
+                            ));
+                        }
                     }
-                }
-        );
+            );
+        } catch (Exception e) {
+            try {
+                finishBackupWindow(source);
+            } catch (Exception finishError) {
+                e.addSuppressed(finishError);
+            }
+            backupInProgress.set(false);
+            source.sendFailure(Component.literal("启动备份失败: " + e.getMessage()));
+            return 0;
+        }
 
         future.whenComplete((result, throwable) -> source.getServer().execute(() -> {
+            try {
+                finishBackupWindow(source);
+            } catch (Exception e) {
+                source.sendFailure(Component.literal("备份后恢复自动保存失败: " + e.getMessage()));
+            } finally {
+                backupInProgress.set(false);
+            }
+
             if (throwable != null) {
                 source.sendFailure(Component.literal("备份异常: " + throwable.getMessage()));
                 return;
@@ -213,6 +252,19 @@ public class ChronoVaultCommands {
         }));
 
         return 1;
+    }
+
+    private void prepareBackupWindow(CommandSourceStack source) {
+        source.getServer().executeBlocking(() -> {
+            source.getServer().saveEverything(true, false, true);
+            source.getServer().getAllLevels().forEach(level -> level.noSave = true);
+        });
+    }
+
+    private void finishBackupWindow(CommandSourceStack source) {
+        source.getServer().executeBlocking(() ->
+            source.getServer().getAllLevels().forEach(level -> level.noSave = false)
+        );
     }
 
     /**

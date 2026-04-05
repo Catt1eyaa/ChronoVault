@@ -129,18 +129,17 @@ public class AutoBackupScheduler {
     }
 
     private void executeAutoBackup() {
+        boolean prepared = false;
         try {
             LOGGER.info("Starting automatic backup...");
 
-            server.execute(() -> {
-                try {
-                    server.saveEverything(true, false, true);
-                } catch (Exception e) {
-                    LOGGER.log(Level.SEVERE, "Auto backup pre-save failed", e);
-                }
+            server.executeBlocking(() -> {
+                server.saveEverything(true, false, true);
+                server.getAllLevels().forEach(level -> level.noSave = true);
             });
+            prepared = true;
 
-            Path worldDir = server.getWorldPath(LevelResource.ROOT);
+            Path worldDir = resolveCurrentWorldDir(server);
             Path worldBackupDir = resolveWorldBackupDir(backupRoot, worldDir);
             BackupExecutor backupExecutor = new BackupExecutor(worldBackupDir, compressionLevel);
 
@@ -157,7 +156,26 @@ public class AutoBackupScheduler {
             }
         } catch (Exception e) {
             LOGGER.log(Level.SEVERE, "Auto backup encountered an error", e);
+        } finally {
+            if (prepared) {
+                try {
+                    server.executeBlocking(() -> server.getAllLevels().forEach(level -> level.noSave = false));
+                } catch (Exception e) {
+                    LOGGER.log(Level.SEVERE, "Failed to re-enable world saving after auto backup", e);
+                }
+            }
         }
+    }
+
+    static Path resolveCurrentWorldDir(MinecraftServer server) {
+        Objects.requireNonNull(server, "server cannot be null");
+
+        Path levelDatPath = server.getWorldPath(LevelResource.LEVEL_DATA_FILE);
+        Path worldDir = levelDatPath.getParent();
+        if (worldDir == null || worldDir.getFileName() == null) {
+            throw new IllegalArgumentException("Unable to resolve world directory from level.dat path: " + levelDatPath);
+        }
+        return worldDir;
     }
 
     static Path resolveWorldBackupDir(Path backupRoot, Path worldDir) {

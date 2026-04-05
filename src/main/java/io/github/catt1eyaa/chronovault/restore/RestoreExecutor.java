@@ -1,6 +1,7 @@
 package io.github.catt1eyaa.chronovault.restore;
 
 import io.github.catt1eyaa.chronovault.region.AnvilWriter;
+import io.github.catt1eyaa.chronovault.region.AnvilReader;
 import io.github.catt1eyaa.chronovault.region.ChunkData;
 import io.github.catt1eyaa.chronovault.snapshot.ChunkEntry;
 import io.github.catt1eyaa.chronovault.snapshot.Manifest;
@@ -172,7 +173,11 @@ public class RestoreExecutor {
 
                 Path regionPath = resolveRegionFilePath(dimensionRoot, regionEntry.filename());
                 Files.createDirectories(regionPath.getParent());
-                AnvilWriter.writeRegion(regionPath, chunks);
+                if (AnvilReader.zeroByteRegionFormat().equals(regionEntry.format())) {
+                    Files.write(regionPath, new byte[0]);
+                } else {
+                    AnvilWriter.writeRegion(regionPath, chunks);
+                }
                 restoredRegions++;
             }
         }
