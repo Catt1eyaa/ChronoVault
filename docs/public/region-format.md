@@ -139,7 +139,10 @@ assert original.equals(readBack);
 ./gradlew test
 
 # Run specific test class
-./gradlew test --tests AnvilWriterTest
+./gradlew test --tests "*AnvilWriterTest"
+
+# Run specific test method
+./gradlew test --tests "*AnvilWriterTest.testRoundTripConsistency"
 ```
 
 ### Demo Programs
@@ -150,9 +153,6 @@ assert original.equals(readBack);
 
 # Byte-level file comparison
 ./gradlew compareFiles
-
-# Original chunk extraction demo
-./gradlew runChunkTest
 ```
 
 ### Test Coverage
@@ -161,7 +161,7 @@ The test suite includes:
 
 1. **Round-trip consistency tests**
    - Verify that reading and writing preserves all chunk data
-   - All 480 chunks from test world verified
+   - Uses real-world region data when available, with synthetic/conditional fallback in CI or clean environments
 
 2. **Partial chunk writing**
    - Test writing subsets of chunks
@@ -237,9 +237,9 @@ This module is designed to integrate with content-addressable storage:
 ## Validation and Verification
 
 ### Automated Tests
-- 8 comprehensive JUnit tests
-- All tests pass with real Minecraft world data
-- 480 chunks verified in round-trip test
+- Region format tests currently include `AnvilWriterTest` and `AnvilReaderTest`
+- Coverage includes round-trip consistency, partial writes, format validity, timestamps, invalid inputs, and zero-byte region handling
+- Some scenarios use a local Minecraft world file if present; exact chunk counts are environment-dependent
 
 ### Manual Verification
 You can verify generated files work in Minecraft:
