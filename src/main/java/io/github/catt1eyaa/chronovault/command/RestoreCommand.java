@@ -26,8 +26,6 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.network.chat.Component;
@@ -37,15 +35,6 @@ import net.minecraft.world.level.storage.LevelResource;
  * ChronoVault 恢复命令
  */
 public class RestoreCommand {
-
-    private static final ExecutorService EXECUTOR = Executors.newSingleThreadExecutor();
-
-    /**
-     * 关闭执行器（服务器停止时调用）
-     */
-    public static void shutdown() {
-        EXECUTOR.shutdown();
-    }
 
     public static int execute(CommandSourceStack source, Path backupRoot, String snapshotId, String newWorldName) {
         if (backupRoot == null) {
@@ -89,7 +78,9 @@ public class RestoreCommand {
             sanitizedNewWorldName = worldName;
         }
 
-        Path savesDir = source.getServer().getWorldPath(LevelResource.ROOT).getParent();
+        // 获取 saves 目录：从当前世界目录向上一级
+        // worldDir 是 saves/test，savesDir 应该是 saves/
+        Path savesDir = worldDir.getParent();
         if (savesDir == null) {
             source.sendFailure(Component.literal("无法解析存档目录"));
             return 0;
@@ -97,6 +88,7 @@ public class RestoreCommand {
 
         source.sendSuccess(() -> Component.literal("正在恢复快照: " + snapshotId), true);
 
+        // 使用 ForkJoinPool.commonPool() 而不是静态 EXECUTOR，避免生命周期管理问题
         CompletableFuture<RestoreResult> future = CompletableFuture.supplyAsync(() -> {
             try {
                 RestoreExecutor executor = new RestoreExecutor(worldBackupDir);
@@ -104,7 +96,7 @@ public class RestoreCommand {
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
-        }, EXECUTOR);
+        });
 
         future.whenComplete((result, throwable) -> source.getServer().execute(() -> {
             if (throwable != null) {
