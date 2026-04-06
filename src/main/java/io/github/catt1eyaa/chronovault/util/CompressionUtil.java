@@ -70,10 +70,9 @@ public class CompressionUtil {
      * 
      * @param data 原始数据
      * @return 压缩后的数据
-     * @throws IOException 如果压缩失败
      * @throws IllegalArgumentException 如果输入为null
      */
-    public static byte[] compress(byte[] data) throws IOException {
+    public static byte[] compress(byte[] data) {
         return compress(data, DEFAULT_LEVEL);
     }
     
@@ -91,10 +90,9 @@ public class CompressionUtil {
      * @param data 原始数据
      * @param level 压缩级别 (1-22，推荐3-6)
      * @return 压缩后的数据
-     * @throws IOException 如果压缩失败
      * @throws IllegalArgumentException 如果输入为null或压缩级别无效
      */
-    public static byte[] compress(byte[] data, int level) throws IOException {
+    public static byte[] compress(byte[] data, int level) {
         if (data == null) {
             throw new IllegalArgumentException("Input data cannot be null");
         }
@@ -133,26 +131,8 @@ public class CompressionUtil {
         }
         
         try {
-            // 获取解压后的大小（Zstd在压缩数据头部存储此信息）
-            long decompressedSize = Zstd.decompressedSize(compressedData);
-            
-            if (decompressedSize == 0) {
-                // 如果无法获取大小信息，使用流式API
-                return decompressWithStream(compressedData);
-            }
-            
-            // 如果大小已知，直接分配缓冲区并解压
-            byte[] decompressed = new byte[(int) decompressedSize];
-            long actualSize = Zstd.decompress(decompressed, compressedData);
-            
-            if (actualSize != decompressedSize) {
-                throw new IOException(
-                    "Decompression size mismatch: expected " + decompressedSize + 
-                    ", got " + actualSize
-                );
-            }
-            
-            return decompressed;
+            // 使用流式API解压以避免过时API并处理任意大小的数据
+            return decompressWithStream(compressedData);
         } catch (Exception e) {
             throw new IOException("Failed to decompress data: " + e.getMessage(), e);
         }
