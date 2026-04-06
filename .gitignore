@@ -37,9 +37,6 @@ run/
 repo/
 !**/src/**/repo/
 
-### OpenCode ###
-AGENTS.md
-
 ### Docs ###
 docs/internal/
 docs/drafts/
