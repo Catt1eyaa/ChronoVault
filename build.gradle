@@ -217,7 +217,8 @@ test {
 tasks.register('runWriterDemo', JavaExec) {
     group = 'verification'
     description = 'Runs the AnvilWriterDemo to verify round-trip writing'
-    classpath = sourceSets.main.runtimeClasspath
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
     mainClass = 'io.github.catt1eyaa.chronovault.region.AnvilWriterDemo'
     workingDir = project.projectDir
 }
@@ -226,7 +227,8 @@ tasks.register('runWriterDemo', JavaExec) {
 tasks.register('compareFiles', JavaExec) {
     group = 'verification'
     description = 'Compares original and round-trip files byte-by-byte'
-    classpath = sourceSets.main.runtimeClasspath
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
     mainClass = 'io.github.catt1eyaa.chronovault.region.FileComparer'
     workingDir = project.projectDir
 }
@@ -235,7 +237,8 @@ tasks.register('compareFiles', JavaExec) {
 tasks.register('runBlake3Verify', JavaExec) {
     group = 'verification'
     description = 'Verifies BLAKE3 hash values for known inputs'
-    classpath = sourceSets.main.runtimeClasspath
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
     mainClass = 'io.github.catt1eyaa.chronovault.util.Blake3Verify'
     workingDir = project.projectDir
 }
@@ -244,7 +247,8 @@ tasks.register('runBlake3Verify', JavaExec) {
 tasks.register('runObjectPoolDemo', JavaExec) {
     group = 'verification'
     description = 'Runs the ObjectPool demo to showcase storage capabilities'
-    classpath = sourceSets.main.runtimeClasspath
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
     mainClass = 'io.github.catt1eyaa.chronovault.storage.ObjectPoolDemo'
     workingDir = project.projectDir
 }
