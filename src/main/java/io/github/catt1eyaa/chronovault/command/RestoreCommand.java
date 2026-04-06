@@ -19,6 +19,7 @@ package io.github.catt1eyaa.chronovault.command;
 
 import io.github.catt1eyaa.chronovault.restore.RestoreExecutor;
 import io.github.catt1eyaa.chronovault.restore.RestoreResult;
+import io.github.catt1eyaa.chronovault.snapshot.ManifestSerializer;
 import io.github.catt1eyaa.chronovault.storage.BackupPathResolver;
 
 import java.io.IOException;
@@ -39,6 +40,13 @@ public class RestoreCommand {
 
     private static final ExecutorService EXECUTOR = Executors.newSingleThreadExecutor();
 
+    /**
+     * 关闭执行器（服务器停止时调用）
+     */
+    public static void shutdown() {
+        EXECUTOR.shutdown();
+    }
+
     public static int execute(CommandSourceStack source, Path backupRoot, String snapshotId, String newWorldName) {
         if (backupRoot == null) {
             source.sendFailure(Component.literal("备份目录未初始化"));
@@ -54,6 +62,33 @@ public class RestoreCommand {
             return 0;
         }
 
+        // 验证快照是否存在
+        Path snapshotFile = worldBackupDir.resolve("snapshots").resolve(snapshotId + ".json");
+        if (!Files.exists(snapshotFile)) {
+            source.sendFailure(Component.literal("快照不存在: " + snapshotId));
+            return 0;
+        }
+
+        // 验证快照文件是否可读
+        try {
+            ManifestSerializer.load(snapshotFile);
+        } catch (IOException e) {
+            source.sendFailure(Component.literal("快照文件损坏: " + e.getMessage()));
+            return 0;
+        }
+
+        // 对 newWorldName 参数进行校验
+        String sanitizedNewWorldName;
+        if (newWorldName != null) {
+            sanitizedNewWorldName = BackupPathResolver.sanitizeWorldName(newWorldName);
+            if (sanitizedNewWorldName.isEmpty()) {
+                source.sendFailure(Component.literal("无效的世界名称: " + newWorldName));
+                return 0;
+            }
+        } else {
+            sanitizedNewWorldName = worldName;
+        }
+
         Path savesDir = source.getServer().getWorldPath(LevelResource.ROOT).getParent();
         if (savesDir == null) {
             source.sendFailure(Component.literal("无法解析存档目录"));
@@ -65,7 +100,7 @@ public class RestoreCommand {
         CompletableFuture<RestoreResult> future = CompletableFuture.supplyAsync(() -> {
             try {
                 RestoreExecutor executor = new RestoreExecutor(worldBackupDir);
-                return executor.restoreToNewWorld(snapshotId, savesDir, newWorldName != null ? newWorldName : worldName);
+                return executor.restoreToNewWorld(snapshotId, savesDir, sanitizedNewWorldName);
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }

@@ -20,6 +20,7 @@ package io.github.catt1eyaa;
 import io.github.catt1eyaa.chronovault.backup.AutoBackupScheduler;
 import io.github.catt1eyaa.chronovault.cli.ChronoVaultCLI;
 import io.github.catt1eyaa.chronovault.command.ChronoVaultCommands;
+import io.github.catt1eyaa.chronovault.command.RestoreCommand;
 
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -50,7 +51,7 @@ public class ChronoVault {
             switch (args[0]) {
                 case "list", "restore" -> {
                     ChronoVaultCLI.main(args);
-                    return;
+                    System.exit(0);
                 }
             }
         }
@@ -100,5 +101,6 @@ public class ChronoVault {
         if (commands != null) {
             commands.shutdownBackupService();
         }
+        RestoreCommand.shutdown();
     }
 }
