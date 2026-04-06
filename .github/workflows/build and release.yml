@@ -6,13 +6,21 @@ on:
 name: Build and Release
 
 jobs:
-  build-and-release:
-    runs-on: ubuntu-latest
+  build:
+    uses: ./.github/workflows/build.yml
 
+  release:
+    needs: build
+    runs-on: ubuntu-latest
     permissions:
       contents: write
-
     steps:
+      - uses: actions/checkout@v4
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifacts
+          path: ./build/libs/
       - uses: Kir-Antipov/mc-publish@v3.3
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
