@@ -1,0 +1,21 @@
+ChronoVault
+Copyright (C) 2026 Cattleya
+
+This software includes the following third-party components:
+
+- Bouncy Castle Crypto Package (bcprov-jdk18on 1.78.1)
+  Licensed under Bouncy Castle License
+  https://www.bouncycastle.org/
+
+- Zstd-JNI (zstd-jni 1.5.6-3)
+  Licensed under BSD-2-Clause
+  Copyright (C) Yann Collet, Facebook, Inc.
+  https://facebook.github.io/zstd/
+
+- Gson (2.10.1, test-only)
+  Licensed under Apache License 2.0
+  https://github.com/google/gson
+
+- JUnit 5 (5.10.0, test-only)
+  Licensed under Eclipse Public License 2.0 (EPL-2.0)
+  https://junit.org/junit5/
