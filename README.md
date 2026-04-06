@@ -48,27 +48,6 @@ The mod can be configured in `config/chrono_vault-common.toml`:
 - `compressionLevel` — Zstd compression level (1-22)
 - `maxSnapshots` — Maximum number of snapshots to keep
 
-### Restore CLI
-
-CLI is integrated into the main mod JAR (no separate restore-tool artifact):
-
-```bash
-java -jar chrono_vault-<version>.jar list <backup_root> <world_name>
-java -jar chrono_vault-<version>.jar restore <backup_root> <world_name> <snapshot_id> <saves_root>
-```
-
-**Commands:**
-- `list` — List all available snapshots for a world
-- `restore` — Restore a snapshot (creates a new world, never overwrites)
-
-**Examples:**
-```bash
-java -jar chrono_vault-<version>.jar list /server/backups MyWorld
-java -jar chrono_vault-<version>.jar restore /server/backups MyWorld 20260405_120000 /server/saves
-```
-
-**Output world naming:** `<world_name>-restored-<snapshot_id>`
-
 ## License
 
 Copyright (C) 2026 Cattleya

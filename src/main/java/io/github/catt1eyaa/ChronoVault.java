@@ -18,7 +18,6 @@
 package io.github.catt1eyaa;
 
 import io.github.catt1eyaa.chronovault.backup.AutoBackupScheduler;
-import io.github.catt1eyaa.chronovault.cli.ChronoVaultCLI;
 import io.github.catt1eyaa.chronovault.command.ChronoVaultCommands;
 
 import net.neoforged.bus.api.IEventBus;
@@ -45,25 +44,11 @@ public class ChronoVault {
     private AutoBackupScheduler autoBackupScheduler;
 
     public ChronoVault(IEventBus modEventBus, ModContainer modContainer) {
-        String[] args = getCommandLineArgs();
-        if (args.length > 0) {
-            switch (args[0]) {
-                case "list", "restore" -> {
-                    ChronoVaultCLI.main(args);
-                    System.exit(0);
-                }
-            }
-        }
-
         modContainer.registerConfig(ModConfig.Type.COMMON, Config.SPEC);
 
         commands = new ChronoVaultCommands();
 
         NeoForge.EVENT_BUS.register(this);
-    }
-
-    private static String[] getCommandLineArgs() {
-        return System.getProperty("sun.java.command", "").split(" ");
     }
 
     @SubscribeEvent
