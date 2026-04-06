@@ -17,14 +17,20 @@
 
 package io.github.catt1eyaa.chronovault.command;
 
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.Stream;
 
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
+import com.mojang.brigadier.suggestion.SuggestionProvider;
+import com.mojang.brigadier.suggestion.Suggestions;
 
+import io.github.catt1eyaa.Config;
 import io.github.catt1eyaa.chronovault.backup.AsyncBackupService;
 import io.github.catt1eyaa.chronovault.backup.BackupResult;
 import io.github.catt1eyaa.chronovault.storage.BackupPathResolver;
@@ -52,6 +58,43 @@ import net.minecraft.world.level.storage.LevelResource;
 public class ChronoVaultCommands {
 
     private static final String COMMAND_NAME = "chronovault";
+    private static volatile Path staticBackupRoot;
+
+    public static final SuggestionProvider<CommandSourceStack> SNAPSHOT_SUGGESTIONS = (context, builder) -> {
+        CommandSourceStack source = context.getSource();
+        if (source == null || source.getServer() == null) {
+            return builder.buildFuture();
+        }
+
+        Path backupRoot = staticBackupRoot;
+        if (backupRoot == null) {
+            return builder.buildFuture();
+        }
+
+        try {
+            Path worldPath = source.getServer().getWorldPath(LevelResource.LEVEL_DATA_FILE).getParent();
+            if (worldPath == null || worldPath.getFileName() == null) {
+                return builder.buildFuture();
+            }
+            String worldName = worldPath.getFileName().toString();
+            Path worldBackupDir = BackupPathResolver.resolve(backupRoot, worldName);
+            if (Files.exists(worldBackupDir)) {
+                Path snapshotsDir = worldBackupDir.resolve("snapshots");
+                if (Files.exists(snapshotsDir)) {
+                    try (Stream<Path> files = Files.list(snapshotsDir)) {
+                        files.filter(p -> p.toString().endsWith(".json"))
+                            .map(p -> p.getFileName().toString().replace(".json", ""))
+                            .filter(id -> id.toLowerCase().startsWith(builder.getRemaining().toLowerCase()))
+                            .forEach(id -> builder.suggest(id));
+                    }
+                }
+            }
+        } catch (IOException e) {
+            // 忽略错误
+        }
+
+        return builder.buildFuture();
+    };
 
     private volatile AsyncBackupService backupService;
     private volatile Path backupRoot;
@@ -72,7 +115,7 @@ public class ChronoVaultCommands {
      */
     public void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         LiteralArgumentBuilder<CommandSourceStack> root = Commands.literal(COMMAND_NAME)
-                .requires(source -> source.hasPermission(4));
+                .requires(source -> source.hasPermission(Config.getCommandPermissionLevel()));
 
         root.then(Commands.literal("backup")
                 .executes(context -> executeBackup(context.getSource(), null))
@@ -90,10 +133,29 @@ public class ChronoVaultCommands {
 
         root.then(Commands.literal("info")
                 .then(Commands.argument("snapshot_id", StringArgumentType.string())
+                        .suggests(SNAPSHOT_SUGGESTIONS)
                         .executes(context -> executeInfo(
                                 context.getSource(),
                                 StringArgumentType.getString(context, "snapshot_id")
                         ))
+                )
+        );
+
+        root.then(Commands.literal("restore")
+                .then(Commands.argument("snapshot_id", StringArgumentType.string())
+                        .suggests(SNAPSHOT_SUGGESTIONS)
+                        .executes(context -> executeRestore(
+                                context.getSource(),
+                                StringArgumentType.getString(context, "snapshot_id"),
+                                null
+                        ))
+                        .then(Commands.argument("new_world_name", StringArgumentType.string())
+                                .executes(context -> executeRestore(
+                                        context.getSource(),
+                                        StringArgumentType.getString(context, "snapshot_id"),
+                                        StringArgumentType.getString(context, "new_world_name")
+                                ))
+                        )
                 )
         );
 
@@ -122,6 +184,7 @@ public class ChronoVaultCommands {
         }
 
         this.backupRoot = backupRoot;
+        staticBackupRoot = backupRoot;
         this.compressionLevel = compressionLevel;
     }
 
@@ -313,5 +376,9 @@ public class ChronoVaultCommands {
         }
         Path worldBackupDir = getWorldBackupDir(source);
         return InfoCommand.execute(source, worldBackupDir, snapshotId);
+    }
+
+    private int executeRestore(CommandSourceStack source, String snapshotId, String newWorldName) {
+        return RestoreCommand.execute(source, backupRoot, snapshotId, newWorldName);
     }
 }

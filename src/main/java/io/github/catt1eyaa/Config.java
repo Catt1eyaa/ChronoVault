@@ -63,6 +63,19 @@ public class Config {
             .comment("Zstd compression level (1-22, higher = better compression but slower)")
             .defineInRange("compressionLevel", 3, 1, 22);
 
+    /**
+     * 命令权限等级（0-4）
+     * 0 = 所有玩家可用（单人游戏推荐）
+     * 2 = OP 以上的 GAMEMASTER
+     * 4 = 仅 OP
+     */
+    public static final ModConfigSpec.IntValue COMMAND_PERMISSION_LEVEL = BUILDER
+            .comment("Permission level required to use /chronovault commands (0-4)",
+                    "0 = all players (recommended for single player)",
+                    "2 = gamemaster+",
+                    "4 = op only")
+            .defineInRange("commandPermissionLevel", 2, 0, 4);
+
     static final ModConfigSpec SPEC = BUILDER.build();
 
     /**
@@ -98,5 +111,12 @@ public class Config {
      */
     public static int getCompressionLevel() {
         return COMPRESSION_LEVEL.get();
+    }
+
+    /**
+     * 获取命令权限等级
+     */
+    public static int getCommandPermissionLevel() {
+        return COMMAND_PERMISSION_LEVEL.get();
     }
 }
