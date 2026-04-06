@@ -2,6 +2,12 @@
 
 A Minecraft 1.21.1 NeoForge mod providing git-like backup for worlds.
 
+## Development
+
+This project was developed using [OpenCode](https://github.com/anomalyco/opencode) with:
+- **SpecDD** (Specification-Driven Development) — for feature design and planning
+- **Superpowers** (obra/superpowers) — for [TDD](https://github.com/obra/superpowers)-based code implementation
+
 ## Features
 
 - **Content-addressable storage**: BLAKE3 hashing for deduplication
@@ -41,6 +47,27 @@ The mod can be configured in `config/chrono_vault-common.toml`:
 - `autoBackupIntervalMinutes` — Interval between auto backups
 - `compressionLevel` — Zstd compression level (1-22)
 - `maxSnapshots` — Maximum number of snapshots to keep
+
+### Restore CLI
+
+Standalone restore tool for server environments:
+
+```bash
+java -jar chronovault-restore.jar list <backup_root> <world_name>
+java -jar chronovault-restore.jar restore <backup_root> <world_name> <snapshot_id> <saves_root>
+```
+
+**Commands:**
+- `list` — List all available snapshots for a world
+- `restore` — Restore a snapshot (creates a new world, never overwrites)
+
+**Examples:**
+```bash
+java -jar chronovault-restore.jar list /server/backups MyWorld
+java -jar chronovault-restore.jar restore /server/backups MyWorld 20260405_120000 /server/saves
+```
+
+**Output world naming:** `<world_name>-restored-<snapshot_id>`
 
 ## License
 
