@@ -21,20 +21,17 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Stream;
 
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.suggestion.SuggestionProvider;
-import com.mojang.brigadier.suggestion.Suggestions;
 
 import io.github.catt1eyaa.Config;
-import io.github.catt1eyaa.chronovault.backup.AsyncBackupService;
+import io.github.catt1eyaa.chronovault.backup.BackupCoordinator;
 import io.github.catt1eyaa.chronovault.backup.BackupResult;
 import io.github.catt1eyaa.chronovault.storage.BackupPathResolver;
-import io.github.catt1eyaa.chronovault.util.CompressionUtil;
 
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -51,9 +48,10 @@ import net.minecraft.world.level.storage.LevelResource;
  * /chronovault backup [description]  - 手动触发备份
  * /chronovault list                  - 列出所有快照
  * /chronovault info &lt;snapshot_id&gt;    - 显示快照详细信息
+ * /chronovault restore &lt;snapshot_id&gt; [new_world_name] - 恢复快照
  * </pre>
  *
- * <p>权限要求：OP level 4</p>
+ * <p>权限要求：由配置文件控制（默认 OP level 2）</p>
  */
 public class ChronoVaultCommands {
 
@@ -96,11 +94,8 @@ public class ChronoVaultCommands {
         return builder.buildFuture();
     };
 
-    private volatile AsyncBackupService backupService;
+    private volatile BackupCoordinator coordinator;
     private volatile Path backupRoot;
-    private volatile int compressionLevel;
-    private final Object backupServiceLock = new Object();
-    private final AtomicBoolean backupInProgress = new AtomicBoolean(false);
 
     /**
      * 创建命令注册器。
@@ -163,41 +158,24 @@ public class ChronoVaultCommands {
     }
 
     /**
-     * 初始化备份服务（服务器启动时调用）。
+     * 设置备份协调器
      *
-     * @param backupRoot 备份根目录
-     * @param compressionLevel 压缩级别
+     * @param coordinator 备份协调器
+     * @param backupRoot  备份根目录
      */
-    public void initBackupService(Path backupRoot, int compressionLevel) {
-        if (backupRoot == null) {
-            throw new IllegalArgumentException("backupRoot 不能为 null");
-        }
-        if (!CompressionUtil.isValidLevel(compressionLevel)) {
-            throw new IllegalArgumentException("compressionLevel 无效: " + compressionLevel);
-        }
-
-        synchronized (backupServiceLock) {
-            if (backupService != null) {
-                backupService.close();
-                backupService = null;
-            }
-        }
-
+    public void setCoordinator(BackupCoordinator coordinator, Path backupRoot) {
+        this.coordinator = coordinator;
         this.backupRoot = backupRoot;
         staticBackupRoot = backupRoot;
-        this.compressionLevel = compressionLevel;
     }
 
     /**
-     * 关闭备份服务（服务器关闭时调用）。
+     * 关闭命令处理器（服务器关闭时调用）
      */
-    public void shutdownBackupService() {
-        synchronized (backupServiceLock) {
-            if (backupService != null) {
-                backupService.close();
-                backupService = null;
-            }
-        }
+    public void shutdown() {
+        // 协调器的关闭由 ChronoVault 主类管理
+        this.coordinator = null;
+        this.backupRoot = null;
     }
 
     /**
@@ -222,48 +200,25 @@ public class ChronoVaultCommands {
     }
 
     /**
-     * 获取或创建当前世界的备份服务。
-     *
-     * @param source 命令源
-     * @return 备份服务
-     */
-    private AsyncBackupService getOrCreateBackupService(CommandSourceStack source) {
-        Path worldBackupDir = getWorldBackupDir(source);
-
-        synchronized (backupServiceLock) {
-            if (backupService == null) {
-                backupService = new AsyncBackupService(worldBackupDir, compressionLevel);
-            }
-            return backupService;
-        }
-    }
-
-    /**
      * 执行备份命令。
      *
-     * @param source 命令源
+     * @param source      命令源
      * @param description 备份描述
      * @return 命令结果
      */
     private int executeBackup(CommandSourceStack source, String description) {
-        if (backupRoot == null) {
+        if (coordinator == null) {
             source.sendFailure(Component.literal("备份服务未初始化"));
             return 0;
         }
 
-        if (!backupInProgress.compareAndSet(false, true)) {
-            source.sendFailure(Component.literal("已有备份任务正在进行，请稍后重试"));
+        if (BackupCoordinator.isBackupDisabled()) {
+            source.sendFailure(Component.literal("备份功能已通过 JVM 参数禁用"));
             return 0;
         }
 
-        Path worldDir;
-
-        try {
-            worldDir = resolveCurrentWorldDir(source);
-            prepareBackupWindow(source);
-        } catch (Exception e) {
-            backupInProgress.set(false);
-            source.sendFailure(Component.literal("备份前保存失败: " + e.getMessage()));
+        if (coordinator.isBackupInProgress()) {
+            source.sendFailure(Component.literal("已有备份任务正在进行，请稍后重试"));
             return 0;
         }
 
@@ -271,42 +226,20 @@ public class ChronoVaultCommands {
         String backupMessage = "开始备份" + (desc.isEmpty() ? "" : "：" + desc);
         source.sendSuccess(() -> Component.literal(backupMessage), true);
 
-        AsyncBackupService service = getOrCreateBackupService(source);
-        CompletableFuture<BackupResult> future;
-        try {
-            future = service.backupAsync(
-                    worldDir,
-                    source.getServer().getServerVersion(),
-                    desc,
-                    (current, total, file) -> {
-                        if (current % 10 == 0 || current == total) {
-                            source.getServer().execute(() -> source.sendSuccess(
-                                    () -> Component.literal(String.format("进度: %d/%d - %s", current, total, file)),
-                                    false
-                            ));
-                        }
+        // 使用 BackupCoordinator 执行异步备份
+        CompletableFuture<BackupResult> future = coordinator.backupAsync(
+                desc,
+                (current, total, file) -> {
+                    if (current % 10 == 0 || current == total) {
+                        source.getServer().execute(() -> source.sendSuccess(
+                                () -> Component.literal(String.format("进度: %d/%d - %s", current, total, file)),
+                                false
+                        ));
                     }
-            );
-        } catch (Exception e) {
-            try {
-                finishBackupWindow(source);
-            } catch (Exception finishError) {
-                e.addSuppressed(finishError);
-            }
-            backupInProgress.set(false);
-            source.sendFailure(Component.literal("启动备份失败: " + e.getMessage()));
-            return 0;
-        }
+                }
+        );
 
         future.whenComplete((result, throwable) -> source.getServer().execute(() -> {
-            try {
-                finishBackupWindow(source);
-            } catch (Exception e) {
-                source.sendFailure(Component.literal("备份后恢复自动保存失败: " + e.getMessage()));
-            } finally {
-                backupInProgress.set(false);
-            }
-
             if (throwable != null) {
                 source.sendFailure(Component.literal("备份异常: " + throwable.getMessage()));
                 return;
@@ -334,19 +267,6 @@ public class ChronoVaultCommands {
         return 1;
     }
 
-    private void prepareBackupWindow(CommandSourceStack source) {
-        source.getServer().executeBlocking(() -> {
-            source.getServer().saveEverything(true, false, true);
-            source.getServer().getAllLevels().forEach(level -> level.noSave = true);
-        });
-    }
-
-    private void finishBackupWindow(CommandSourceStack source) {
-        source.getServer().executeBlocking(() ->
-            source.getServer().getAllLevels().forEach(level -> level.noSave = false)
-        );
-    }
-
     /**
      * 执行列表命令。
      *
@@ -365,7 +285,7 @@ public class ChronoVaultCommands {
     /**
      * 执行信息命令。
      *
-     * @param source 命令源
+     * @param source     命令源
      * @param snapshotId 快照 ID
      * @return 命令结果
      */

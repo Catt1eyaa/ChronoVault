@@ -17,9 +17,12 @@
 
 package io.github.catt1eyaa.chronovault.backup;
 
-import java.io.IOException;
+import net.minecraft.server.MinecraftServer;
+
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * 世界状态管理器
@@ -28,84 +31,101 @@ import java.util.concurrent.atomic.AtomicBoolean;
  *
  * <p>标准流程：</p>
  * <ol>
- *   <li>{@code prepareForBackup()}：执行 {@code save-all flush} 后执行 {@code save-off}</li>
+ *   <li>{@code prepareForBackup()}：执行 save-all flush 后禁用自动保存</li>
  *   <li>执行备份逻辑</li>
- *   <li>{@code finishBackup()}：执行 {@code save-on}</li>
+ *   <li>{@code finishBackup()}：重新启用自动保存</li>
  * </ol>
+ *
+ * <p>线程安全：此类的方法会在主服务器线程上阻塞执行世界保存操作。</p>
  */
 public class WorldStateManager {
 
-    private final CommandRunner commandRunner;
+    private static final Logger LOGGER = Logger.getLogger(WorldStateManager.class.getName());
+
+    private final MinecraftServer server;
     private final AtomicBoolean prepared;
 
     /**
      * 创建世界状态管理器
      *
-     * @param commandRunner 命令执行器
+     * @param server Minecraft 服务器实例
      */
-    public WorldStateManager(CommandRunner commandRunner) {
-        this.commandRunner = Objects.requireNonNull(commandRunner, "commandRunner cannot be null");
+    public WorldStateManager(MinecraftServer server) {
+        this.server = Objects.requireNonNull(server, "server cannot be null");
         this.prepared = new AtomicBoolean(false);
     }
 
     /**
-     * 进入备份前状态：先 flush，再关闭自动保存。
+     * 进入备份前状态：先 flush 所有数据到磁盘，再关闭自动保存。
      *
-     * @throws IOException 命令执行失败
+     * <p>此方法会阻塞直到世界保存完成。</p>
+     *
+     * @throws IllegalStateException 如果已经处于备份状态
      */
-    public void prepareForBackup() throws IOException {
+    public void prepareForBackup() {
         if (prepared.get()) {
+            LOGGER.warning("Already in backup state, skipping prepare");
             return;
         }
 
-        runCommand("save-all flush");
+        LOGGER.fine("Preparing for backup: saving world and disabling auto-save");
+
         try {
-            runCommand("save-off");
+            server.executeBlocking(() -> {
+                // 先刷新所有数据到磁盘
+                server.saveEverything(true, false, true);
+                // 然后禁用自动保存
+                server.getAllLevels().forEach(level -> level.noSave = true);
+            });
             prepared.set(true);
-        } catch (IOException e) {
+            LOGGER.fine("Backup preparation complete");
+        } catch (Exception e) {
+            // 如果保存失败，尝试恢复自动保存
+            LOGGER.log(Level.SEVERE, "Failed to prepare for backup", e);
             try {
-                runCommand("save-on");
-            } catch (IOException rollbackError) {
-                e.addSuppressed(rollbackError);
+                server.executeBlocking(() ->
+                    server.getAllLevels().forEach(level -> level.noSave = false)
+                );
+            } catch (Exception rollbackError) {
+                LOGGER.log(Level.SEVERE, "Failed to rollback auto-save state", rollbackError);
             }
-            throw e;
+            throw new RuntimeException("Failed to prepare for backup", e);
         }
     }
 
     /**
      * 结束备份状态：重新开启自动保存。
      *
-     * @throws IOException 命令执行失败
+     * <p>此方法应在备份完成后（无论成功或失败）调用。</p>
      */
-    public void finishBackup() throws IOException {
+    public void finishBackup() {
         if (!prepared.get()) {
+            LOGGER.warning("Not in backup state, skipping finish");
             return;
         }
 
-        runCommand("save-on");
-        prepared.set(false);
-    }
+        LOGGER.fine("Finishing backup: re-enabling auto-save");
 
-    /**
-     * 当前是否处于备份保护状态（已执行 save-off）。
-     */
-    public boolean isPrepared() {
-        return prepared.get();
-    }
-
-    private void runCommand(String command) throws IOException {
         try {
-            commandRunner.run(command);
+            server.executeBlocking(() ->
+                server.getAllLevels().forEach(level -> level.noSave = false)
+            );
+            prepared.set(false);
+            LOGGER.fine("Backup finished, auto-save re-enabled");
         } catch (Exception e) {
-            throw new IOException("Failed to execute server command: " + command, e);
+            LOGGER.log(Level.SEVERE, "Failed to re-enable auto-save", e);
+            // 即使失败也标记为未准备状态，避免死锁
+            prepared.set(false);
+            throw new RuntimeException("Failed to finish backup", e);
         }
     }
 
     /**
-     * 服务端命令执行器。
+     * 当前是否处于备份保护状态（已禁用自动保存）。
+     *
+     * @return true 如果处于备份状态
      */
-    @FunctionalInterface
-    public interface CommandRunner {
-        void run(String command) throws Exception;
+    public boolean isPrepared() {
+        return prepared.get();
     }
 }

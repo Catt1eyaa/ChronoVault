@@ -76,6 +76,14 @@ public class Config {
                     "4 = op only")
             .defineInRange("commandPermissionLevel", 2, 0, 4);
 
+    /**
+     * 备份前是否强制执行 save-all
+     */
+    public static final ModConfigSpec.BooleanValue SAVE_ALL_BEFORE_BACKUP = BUILDER
+            .comment("Should a save-all be forced before backup?",
+                    "Recommended to keep enabled for data consistency")
+            .define("saveAllBeforeBackup", true);
+
     static final ModConfigSpec SPEC = BUILDER.build();
 
     /**
@@ -118,5 +126,12 @@ public class Config {
      */
     public static int getCommandPermissionLevel() {
         return COMMAND_PERMISSION_LEVEL.get();
+    }
+
+    /**
+     * 备份前是否执行 save-all
+     */
+    public static boolean isSaveAllBeforeBackup() {
+        return SAVE_ALL_BEFORE_BACKUP.get();
     }
 }

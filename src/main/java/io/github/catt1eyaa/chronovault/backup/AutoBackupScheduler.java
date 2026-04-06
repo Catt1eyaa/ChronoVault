@@ -17,7 +17,6 @@
 
 package io.github.catt1eyaa.chronovault.backup;
 
-import java.nio.file.Path;
 import java.util.Objects;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -26,12 +25,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-
-import net.minecraft.server.MinecraftServer;
-import net.minecraft.world.level.storage.LevelResource;
-
-import io.github.catt1eyaa.chronovault.storage.BackupPathResolver;
-import io.github.catt1eyaa.chronovault.util.CompressionUtil;
 
 /**
  * 自动备份调度器
@@ -43,15 +36,15 @@ import io.github.catt1eyaa.chronovault.util.CompressionUtil;
  *   <li>服务器启动时调用 {@link #start()} 开始调度</li>
  *   <li>服务器关闭时调用 {@link #stop()} 停止调度</li>
  * </ul>
+ *
+ * <p>使用 {@link BackupCoordinator} 执行实际备份，确保与手动备份协调。</p>
  */
 public class AutoBackupScheduler {
 
     private static final Logger LOGGER = Logger.getLogger(AutoBackupScheduler.class.getName());
 
-    private final MinecraftServer server;
-    private final Path backupRoot;
+    private final BackupCoordinator coordinator;
     private final int intervalMinutes;
-    private final int compressionLevel;
 
     private ScheduledExecutorService scheduler;
     private ScheduledFuture<?> scheduledTask;
@@ -60,28 +53,26 @@ public class AutoBackupScheduler {
     /**
      * 创建自动备份调度器
      *
-     * @param server Minecraft 服务器实例
-     * @param backupRoot 备份根目录
+     * @param coordinator     备份协调器
      * @param intervalMinutes 备份间隔（分钟）
-     * @param compressionLevel 压缩级别
      */
-    public AutoBackupScheduler(MinecraftServer server, Path backupRoot, int intervalMinutes, int compressionLevel) {
-        this.server = Objects.requireNonNull(server, "server cannot be null");
-        this.backupRoot = Objects.requireNonNull(backupRoot, "backupRoot cannot be null");
+    public AutoBackupScheduler(BackupCoordinator coordinator, int intervalMinutes) {
+        this.coordinator = Objects.requireNonNull(coordinator, "coordinator cannot be null");
         if (intervalMinutes < 1) {
             throw new IllegalArgumentException("intervalMinutes must be >= 1");
         }
-        if (!CompressionUtil.isValidLevel(compressionLevel)) {
-            throw new IllegalArgumentException("Invalid compression level: " + compressionLevel);
-        }
         this.intervalMinutes = intervalMinutes;
-        this.compressionLevel = compressionLevel;
     }
 
     /**
      * 开始自动备份调度
      */
     public void start() {
+        if (BackupCoordinator.isBackupDisabled()) {
+            LOGGER.info("Auto backup disabled via JVM argument, not starting scheduler");
+            return;
+        }
+
         if (!running.compareAndSet(false, true)) {
             LOGGER.warning("AutoBackupScheduler is already running");
             return;
@@ -93,7 +84,7 @@ public class AutoBackupScheduler {
         }
 
         scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
-            Thread t = new Thread(r, "ChronoVault-AutoBackup");
+            Thread t = new Thread(r, "ChronoVault-AutoBackup-Scheduler");
             t.setDaemon(true);
             return t;
         });
@@ -146,64 +137,31 @@ public class AutoBackupScheduler {
     }
 
     private void executeAutoBackup() {
-        boolean prepared = false;
         try {
             LOGGER.info("Starting automatic backup...");
 
-            server.executeBlocking(() -> {
-                server.saveEverything(true, false, true);
-                server.getAllLevels().forEach(level -> level.noSave = true);
-            });
-            prepared = true;
-
-            Path worldDir = resolveCurrentWorldDir(server);
-            Path worldBackupDir = resolveWorldBackupDir(backupRoot, worldDir);
-            BackupExecutor backupExecutor = new BackupExecutor(worldBackupDir, compressionLevel);
-
-            BackupResult result = backupExecutor.execute(
-                    worldDir,
-                    server.getServerVersion(),
-                    "Auto backup"
-            );
+            // 使用 BackupCoordinator 执行同步备份
+            // BackupCoordinator 会处理：
+            // - 备份锁（防止与手动备份冲突）
+            // - WorldStateManager（save-all + save-off/on）
+            // - 磁盘空间检查
+            // - 快照清理
+            BackupResult result = coordinator.backupSync("Auto backup", null);
 
             if (result.success()) {
-                LOGGER.info(() -> "Auto backup completed successfully: " + result.snapshotId());
+                LOGGER.info(() -> String.format(
+                        "Auto backup completed: %s (files: %d, regions: %d, chunks: %d, time: %dms)",
+                        result.snapshotId(),
+                        result.stats().totalFiles(),
+                        result.stats().totalRegions(),
+                        result.stats().totalChunks(),
+                        result.stats().durationMs()
+                ));
             } else {
-                LOGGER.severe("Auto backup failed: " + String.join("; ", result.errors()));
+                LOGGER.severe(() -> "Auto backup failed: " + String.join("; ", result.errors()));
             }
         } catch (Exception e) {
             LOGGER.log(Level.SEVERE, "Auto backup encountered an error", e);
-        } finally {
-            if (prepared) {
-                try {
-                    server.executeBlocking(() -> server.getAllLevels().forEach(level -> level.noSave = false));
-                } catch (Exception e) {
-                    LOGGER.log(Level.SEVERE, "Failed to re-enable world saving after auto backup", e);
-                }
-            }
         }
-    }
-
-    static Path resolveCurrentWorldDir(MinecraftServer server) {
-        Objects.requireNonNull(server, "server cannot be null");
-
-        Path levelDatPath = server.getWorldPath(LevelResource.LEVEL_DATA_FILE);
-        Path worldDir = levelDatPath.getParent();
-        if (worldDir == null || worldDir.getFileName() == null) {
-            throw new IllegalArgumentException("Unable to resolve world directory from level.dat path: " + levelDatPath);
-        }
-        return worldDir;
-    }
-
-    static Path resolveWorldBackupDir(Path backupRoot, Path worldDir) {
-        Objects.requireNonNull(backupRoot, "backupRoot cannot be null");
-        Objects.requireNonNull(worldDir, "worldDir cannot be null");
-
-        Path fileName = worldDir.getFileName();
-        if (fileName == null) {
-            throw new IllegalArgumentException("worldDir must have a file name: " + worldDir);
-        }
-
-        return BackupPathResolver.resolve(backupRoot, fileName.toString());
     }
 }

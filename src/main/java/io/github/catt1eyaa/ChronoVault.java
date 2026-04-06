@@ -18,6 +18,7 @@
 package io.github.catt1eyaa;
 
 import io.github.catt1eyaa.chronovault.backup.AutoBackupScheduler;
+import io.github.catt1eyaa.chronovault.backup.BackupCoordinator;
 import io.github.catt1eyaa.chronovault.command.ChronoVaultCommands;
 
 import net.neoforged.bus.api.IEventBus;
@@ -41,6 +42,7 @@ public class ChronoVault {
     public static final Logger LOGGER = LogUtils.getLogger();
 
     private ChronoVaultCommands commands;
+    private BackupCoordinator coordinator;
     private AutoBackupScheduler autoBackupScheduler;
 
     public ChronoVault(IEventBus modEventBus, ModContainer modContainer) {
@@ -62,28 +64,53 @@ public class ChronoVault {
     public void onServerStarting(ServerStartingEvent event) {
         Path backupRoot = Path.of(Config.getBackupPath());
         int compressionLevel = Config.getCompressionLevel();
+        int maxSnapshots = Config.getMaxSnapshots();
 
-        commands.initBackupService(backupRoot, compressionLevel);
-        LOGGER.info("ChronoVault backup service initialized");
+        // 创建统一的备份协调器
+        // 使用 server.storageSource 获取 LevelStorageAccess（参考 SimpleBackups）
+        coordinator = new BackupCoordinator(
+                event.getServer(),
+                event.getServer().storageSource,
+                backupRoot,
+                compressionLevel,
+                maxSnapshots
+        );
 
+        // 设置命令处理器的协调器
+        commands.setCoordinator(coordinator, backupRoot);
+        LOGGER.info("ChronoVault backup coordinator initialized");
+
+        // 启动自动备份调度器
         if (Config.isAutoBackupEnabled()) {
             autoBackupScheduler = new AutoBackupScheduler(
-                    event.getServer(),
-                    backupRoot,
-                    Config.getAutoBackupIntervalMinutes(),
-                    compressionLevel
+                    coordinator,
+                    Config.getAutoBackupIntervalMinutes()
             );
             autoBackupScheduler.start();
+            LOGGER.info("ChronoVault auto backup scheduler started (interval: {} minutes)",
+                    Config.getAutoBackupIntervalMinutes());
         }
     }
 
     @SubscribeEvent
     public void onServerStopping(ServerStoppingEvent event) {
+        // 停止自动备份调度器
         if (autoBackupScheduler != null) {
             autoBackupScheduler.stop();
+            autoBackupScheduler = null;
         }
+
+        // 关闭命令处理器
         if (commands != null) {
-            commands.shutdownBackupService();
+            commands.shutdown();
         }
+
+        // 关闭备份协调器
+        if (coordinator != null) {
+            coordinator.shutdown();
+            coordinator = null;
+        }
+
+        LOGGER.info("ChronoVault shutdown complete");
     }
 }
