@@ -41,8 +41,12 @@ repo/
 AGENTS.md
 
 ### Docs ###
-docs/
+docs/internal/
+docs/drafts/
+docs/tmp/
 
 ### Temporary ###
 tmp/
 example_manifest.json
+nul
+NUL
