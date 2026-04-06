@@ -1,0 +1,16 @@
+{
+  "chrono_vault.configuration.title": "Chrono Vault 配置",
+  "chrono_vault.configuration.section.chrono_vault.common.toml": "Chrono Vault 配置",
+  "chrono_vault.configuration.section.chrono_vault.common.toml.title": "Chrono Vault 配置",
+  "gui.chrono_vault.restore.button": "恢复备份",
+  "chrono_vault.restore.title": "恢复快照",
+  "chrono_vault.restore.prev_page": "上一页",
+  "chrono_vault.restore.next_page": "下一页",
+  "chrono_vault.restore.empty": "未找到此世界的快照",
+  "chrono_vault.restore.confirm_title": "恢复快照？",
+  "chrono_vault.restore.confirm_message": "恢复快照 %s？这将覆盖当前世界！",
+  "chrono_vault.restore.confirm_message_new_world": "恢复快照 %s？将创建一个新世界。",
+  "chrono_vault.restore.success": "已恢复 %s：%d 个文件，%d 个区域，%d 个区块",
+  "chrono_vault.restore.new_world_created": "新世界已创建：%s",
+  "chrono_vault.restore.failed": "恢复 %s 失败：%s"
+}
