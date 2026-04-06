@@ -249,63 +249,6 @@ tasks.register('runObjectPoolDemo', JavaExec) {
     workingDir = project.projectDir
 }
 
-// Configuration for standalone restore tool dependencies
-configurations {
-    standaloneDeps
-}
-
-dependencies {
-    // Standalone tool needs these at runtime
-    standaloneDeps 'org.bouncycastle:bcprov-jdk18on:1.78.1'
-    standaloneDeps 'com.github.luben:zstd-jni:1.5.6-3'
-    standaloneDeps 'com.google.code.gson:gson:2.10.1'
-}
-
-// Task to build standalone restore tool JAR
-tasks.register('buildStandaloneTool', Jar) {
-    group = 'build'
-    description = 'Builds standalone restore tool JAR with all dependencies'
-    archiveClassifier = 'restore-tool'
-    
-    manifest {
-        attributes(
-            'Main-Class': 'io.github.catt1eyaa.chronovault.cli.ChronoVaultCLI',
-            'Implementation-Version': project.version
-        )
-    }
-    
-    // Include only the necessary classes (not mod classes)
-    from(sourceSets.main.output) {
-        include 'io/github/catt1eyaa/chronovault/cli/**'
-        include 'io/github/catt1eyaa/chronovault/restore/**'
-        include 'io/github/catt1eyaa/chronovault/region/**'
-        include 'io/github/catt1eyaa/chronovault/snapshot/**'
-        include 'io/github/catt1eyaa/chronovault/storage/**'
-        include 'io/github/catt1eyaa/chronovault/util/**'
-    }
-    
-    // Include all dependencies
-    from {
-        configurations.standaloneDeps.collect { it.isDirectory() ? it : zipTree(it) }
-    }
-    
-    // Exclude signature files from dependencies
-    exclude 'META-INF/*.SF', 'META-INF/*.DSA', 'META-INF/*.RSA'
-    
-    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
-    
-    destinationDirectory = file("$buildDir/libs")
-}
-
-// Task to test the standalone tool
-tasks.register('testStandaloneTool', JavaExec) {
-    group = 'verification'
-    description = 'Tests the standalone restore tool (help command)'
-    dependsOn buildStandaloneTool
-    classpath = files(buildStandaloneTool.archiveFile)
-    mainClass = 'io.github.catt1eyaa.chronovault.cli.ChronoVaultCLI'
-    args 'help'
-}
 
 // IDEA no longer automatically downloads sources/javadoc jars for dependencies, so we need to explicitly enable the behavior.
 idea {

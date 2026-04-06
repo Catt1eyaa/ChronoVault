@@ -50,11 +50,11 @@ The mod can be configured in `config/chrono_vault-common.toml`:
 
 ### Restore CLI
 
-Standalone restore tool for server environments:
+CLI is integrated into the main mod JAR (no separate restore-tool artifact):
 
 ```bash
-java -jar chronovault-restore.jar list <backup_root> <world_name>
-java -jar chronovault-restore.jar restore <backup_root> <world_name> <snapshot_id> <saves_root>
+java -jar chrono_vault-<version>.jar list <backup_root> <world_name>
+java -jar chrono_vault-<version>.jar restore <backup_root> <world_name> <snapshot_id> <saves_root>
 ```
 
 **Commands:**
@@ -63,8 +63,8 @@ java -jar chronovault-restore.jar restore <backup_root> <world_name> <snapshot_i
 
 **Examples:**
 ```bash
-java -jar chronovault-restore.jar list /server/backups MyWorld
-java -jar chronovault-restore.jar restore /server/backups MyWorld 20260405_120000 /server/saves
+java -jar chrono_vault-<version>.jar list /server/backups MyWorld
+java -jar chrono_vault-<version>.jar restore /server/backups MyWorld 20260405_120000 /server/saves
 ```
 
 **Output world naming:** `<world_name>-restored-<snapshot_id>`

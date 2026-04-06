@@ -12,8 +12,6 @@ build/
 out/
 !**/src/**/out/
 
-.run/
-
 ### Eclipse ###
 .apt_generated
 .classpath
@@ -44,3 +42,7 @@ AGENTS.md
 
 ### Docs ###
 docs/
+
+### Temporary ###
+tmp/
+example_manifest.json

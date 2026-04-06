@@ -33,12 +33,12 @@ import java.time.format.DateTimeFormatter;
 import java.util.List;
 
 /**
- * ChronoVault 独立命令行工具 - 用于服务器环境恢复备份。
+ * ChronoVault 命令行工具 - 集成在模组 JAR 中，用于服务器环境恢复备份。
  *
  * <p>使用方法：
  * <pre>
- * java -jar chronovault-restore.jar list &lt;backup_root&gt; &lt;world_name&gt;
- * java -jar chronovault-restore.jar restore &lt;backup_root&gt; &lt;world_name&gt; &lt;snapshot_id&gt; &lt;saves_root&gt;
+ * java -jar chrono_vault-&lt;version&gt;.jar list &lt;backup_root&gt; &lt;world_name&gt;
+ * java -jar chrono_vault-&lt;version&gt;.jar restore &lt;backup_root&gt; &lt;world_name&gt; &lt;snapshot_id&gt; &lt;saves_root&gt;
  * </pre>
  */
 public class ChronoVaultCLI {
@@ -199,11 +199,11 @@ public class ChronoVaultCLI {
     }
 
     private static void printUsageAndExit() {
-        System.out.println("ChronoVault Restore Tool");
+        System.out.println("ChronoVault CLI (integrated in mod JAR)");
         System.out.println();
         System.out.println("Usage:");
-        System.out.println("  java -jar chronovault-restore.jar list <backup_root> <world_name>");
-        System.out.println("  java -jar chronovault-restore.jar restore <backup_root> <world_name> <snapshot_id> <saves_root>");
+        System.out.println("  java -jar chrono_vault-<version>.jar list <backup_root> <world_name>");
+        System.out.println("  java -jar chrono_vault-<version>.jar restore <backup_root> <world_name> <snapshot_id> <saves_root>");
         System.out.println();
         System.out.println("Commands:");
         System.out.println("  list      List all available snapshots for a world");
@@ -217,8 +217,8 @@ public class ChronoVaultCLI {
         System.out.println("  saves_root    Target saves directory (new world will be created here)");
         System.out.println();
         System.out.println("Examples:");
-        System.out.println("  java -jar chronovault-restore.jar list /server/backups MyWorld");
-        System.out.println("  java -jar chronovault-restore.jar restore /server/backups MyWorld 20260405_120000 /server/saves");
+        System.out.println("  java -jar chrono_vault-<version>.jar list /server/backups MyWorld");
+        System.out.println("  java -jar chrono_vault-<version>.jar restore /server/backups MyWorld 20260405_120000 /server/saves");
         System.out.println();
         System.out.println("The restore command always creates a new world named:");
         System.out.println("  <world_name>-restored-<snapshot_id>");
