@@ -271,61 +271,6 @@ public class ChronoVaultCommands {
         return 1;
     }
 
-        if (BackupCoordinator.isBackupDisabled()) {
-            source.sendFailure(Component.literal("备份功能已通过 JVM 参数禁用"));
-            return 0;
-        }
-
-        if (coordinator.isBackupInProgress()) {
-            source.sendFailure(Component.literal("已有备份任务正在进行，请稍后重试"));
-            return 0;
-        }
-
-        String desc = description != null ? description : "";
-        String backupMessage = "开始备份" + (desc.isEmpty() ? "" : "：" + desc);
-        source.sendSuccess(() -> Component.literal(backupMessage), true);
-
-        // 使用 BackupCoordinator 执行异步备份
-        CompletableFuture<BackupResult> future = coordinator.backupAsync(
-                desc,
-                (current, total, file) -> {
-                    if (current % 10 == 0 || current == total) {
-                        source.getServer().execute(() -> source.sendSuccess(
-                                () -> Component.literal(String.format("进度: %d/%d - %s", current, total, file)),
-                                false
-                        ));
-                    }
-                }
-        );
-
-        future.whenComplete((result, throwable) -> source.getServer().execute(() -> {
-            if (throwable != null) {
-                source.sendFailure(Component.literal("备份异常: " + throwable.getMessage()));
-                return;
-            }
-
-            if (result == null) {
-                source.sendFailure(Component.literal("备份异常: 返回结果为空"));
-                return;
-            }
-
-            if (result.success()) {
-                source.sendSuccess(() -> Component.literal(
-                        String.format("备份完成！快照 ID: %s, 耗时: %dms",
-                                result.snapshotId(),
-                                result.stats().durationMs())
-                ), true);
-            } else {
-                String firstError = result.errors().isEmpty() ? "未知错误" : result.errors().get(0);
-                source.sendFailure(Component.literal(
-                        String.format("备份失败（%d 个错误）: %s", result.errors().size(), firstError)
-                ));
-            }
-        }));
-
-        return 1;
-    }
-
     /**
      * 执行列表命令。
      *
