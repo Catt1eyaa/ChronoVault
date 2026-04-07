@@ -47,7 +47,7 @@ public class Config {
      */
     public static final ModConfigSpec.IntValue AUTO_BACKUP_INTERVAL_MINUTES = BUILDER
             .comment("Interval between automatic backups in minutes")
-            .defineInRange("autoBackupIntervalMinutes", 30, 5, 1440);
+            .defineInRange("autoBackupIntervalMinutes", 30, 1, 1440);
 
     /**
      * 最大快照数（0 表示无限）
