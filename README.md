@@ -35,9 +35,10 @@ The compiled JAR will be in `build/libs/`.
 
 ### Commands
 
-- `/chronovault backup` — Create a backup of the current world
-- `/chronovault list` — List all snapshots
+- `/chronovault backup [description]` — Create a backup of the current world
+- `/chronovault list [world]` — List all snapshots (defaults to current world)
 - `/chronovault info <id>` — Show snapshot details
+- `/chronovault restore <id> [newworld]` — Restore a snapshot to a new world
 
 ### Configuration
 
