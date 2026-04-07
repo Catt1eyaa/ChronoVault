@@ -208,9 +208,68 @@ public class ChronoVaultCommands {
      */
     private int executeBackup(CommandSourceStack source, String description) {
         if (coordinator == null) {
-            source.sendFailure(Component.literal("备份服务未初始化"));
+            source.sendFailure(Component.translatable("chrono_vault.command.backup.service_not_initialized"));
             return 0;
         }
+
+        if (BackupCoordinator.isBackupDisabled()) {
+            source.sendFailure(Component.translatable("chrono_vault.command.backup.disabled"));
+            return 0;
+        }
+
+        if (coordinator.isBackupInProgress()) {
+            source.sendFailure(Component.translatable("chrono_vault.command.backup.in_progress"));
+            return 0;
+        }
+
+        if (description != null && !description.isEmpty()) {
+            source.sendSuccess(() -> Component.translatable("chrono_vault.command.backup.starting_with_desc", description), true);
+        } else {
+            source.sendSuccess(() -> Component.translatable("chrono_vault.command.backup.starting"), true);
+        }
+
+        // 使用 BackupCoordinator 执行异步备份
+        CompletableFuture<BackupResult> future = coordinator.backupAsync(
+                description != null ? description : "",
+                (current, total, file) -> {
+                    if (current % 10 == 0 || current == total) {
+                        source.getServer().execute(() -> source.sendSuccess(
+                                () -> Component.translatable("chrono_vault.command.backup.progress", 
+                                        String.valueOf(current), String.valueOf(total), file),
+                                false
+                        ));
+                    }
+                }
+        );
+
+        future.whenComplete((result, throwable) -> source.getServer().execute(() -> {
+            if (throwable != null) {
+                source.sendFailure(Component.translatable("chrono_vault.command.backup.exception", throwable.getMessage()));
+                return;
+            }
+
+            if (result == null) {
+                source.sendFailure(Component.translatable("chrono_vault.command.backup.exception_null_result"));
+                return;
+            }
+
+            if (result.success()) {
+                source.sendSuccess(() -> Component.translatable("chrono_vault.command.backup.success",
+                        result.snapshotId(),
+                        String.valueOf(result.stats().durationMs())
+                ), true);
+            } else {
+                String firstError = result.errors().isEmpty() 
+                        ? Component.translatable("chrono_vault.command.backup.unknown_error").getString() 
+                        : result.errors().get(0);
+                source.sendFailure(Component.translatable("chrono_vault.command.backup.failed", 
+                        String.valueOf(result.errors().size()), firstError
+                ));
+            }
+        }));
+
+        return 1;
+    }
 
         if (BackupCoordinator.isBackupDisabled()) {
             source.sendFailure(Component.literal("备份功能已通过 JVM 参数禁用"));
@@ -275,7 +334,7 @@ public class ChronoVaultCommands {
      */
     private int executeList(CommandSourceStack source) {
         if (backupRoot == null) {
-            source.sendFailure(Component.literal("备份目录未初始化"));
+            source.sendFailure(Component.translatable("chrono_vault.command.error.backup_root_not_initialized"));
             return 0;
         }
         Path worldBackupDir = getWorldBackupDir(source);
@@ -291,7 +350,7 @@ public class ChronoVaultCommands {
      */
     private int executeInfo(CommandSourceStack source, String snapshotId) {
         if (backupRoot == null) {
-            source.sendFailure(Component.literal("备份目录未初始化"));
+            source.sendFailure(Component.translatable("chrono_vault.command.error.backup_root_not_initialized"));
             return 0;
         }
         Path worldBackupDir = getWorldBackupDir(source);
