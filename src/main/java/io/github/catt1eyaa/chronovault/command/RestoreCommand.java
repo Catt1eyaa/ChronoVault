@@ -38,7 +38,7 @@ public class RestoreCommand {
 
     public static int execute(CommandSourceStack source, Path backupRoot, String snapshotId, String newWorldName) {
         if (backupRoot == null) {
-            source.sendFailure(Component.literal("备份目录未初始化"));
+            source.sendFailure(Component.translatable("chrono_vault.command.error.backup_root_not_initialized"));
             return 0;
         }
 
@@ -47,14 +47,14 @@ public class RestoreCommand {
         Path worldBackupDir = BackupPathResolver.resolve(backupRoot, worldName);
 
         if (!Files.exists(worldBackupDir)) {
-            source.sendFailure(Component.literal("未找到世界 " + worldName + " 的备份"));
+            source.sendFailure(Component.translatable("chrono_vault.command.restore.world_backup_not_found", worldName));
             return 0;
         }
 
         // 验证快照是否存在
         Path snapshotFile = worldBackupDir.resolve("snapshots").resolve(snapshotId + ".json");
         if (!Files.exists(snapshotFile)) {
-            source.sendFailure(Component.literal("快照不存在: " + snapshotId));
+            source.sendFailure(Component.translatable("chrono_vault.command.restore.snapshot_not_found", snapshotId));
             return 0;
         }
 
@@ -62,7 +62,7 @@ public class RestoreCommand {
         try {
             ManifestSerializer.load(snapshotFile);
         } catch (IOException e) {
-            source.sendFailure(Component.literal("快照文件损坏: " + e.getMessage()));
+            source.sendFailure(Component.translatable("chrono_vault.command.restore.snapshot_corrupted", e.getMessage()));
             return 0;
         }
 
@@ -71,7 +71,7 @@ public class RestoreCommand {
         if (newWorldName != null) {
             sanitizedNewWorldName = BackupPathResolver.sanitizeWorldName(newWorldName);
             if (sanitizedNewWorldName.isEmpty()) {
-                source.sendFailure(Component.literal("无效的世界名称: " + newWorldName));
+                source.sendFailure(Component.translatable("chrono_vault.command.restore.invalid_world_name", newWorldName));
                 return 0;
             }
         } else {
@@ -82,11 +82,11 @@ public class RestoreCommand {
         // worldDir 是 saves/test，savesDir 应该是 saves/
         Path savesDir = worldDir.getParent();
         if (savesDir == null) {
-            source.sendFailure(Component.literal("无法解析存档目录"));
+            source.sendFailure(Component.translatable("chrono_vault.command.restore.saves_dir_error"));
             return 0;
         }
 
-        source.sendSuccess(() -> Component.literal("正在恢复快照: " + snapshotId), true);
+        source.sendSuccess(() -> Component.translatable("chrono_vault.command.restore.starting", snapshotId), true);
 
         // 使用 ForkJoinPool.commonPool() 而不是静态 EXECUTOR，避免生命周期管理问题
         CompletableFuture<RestoreResult> future = CompletableFuture.supplyAsync(() -> {
@@ -100,19 +100,18 @@ public class RestoreCommand {
 
         future.whenComplete((result, throwable) -> source.getServer().execute(() -> {
             if (throwable != null) {
-                source.sendFailure(Component.literal("恢复失败: " + throwable.getMessage()));
+                source.sendFailure(Component.translatable("chrono_vault.command.restore.failed_exception", throwable.getMessage()));
                 return;
             }
 
             if (result == null) {
-                source.sendFailure(Component.literal("恢复失败: 返回结果为空"));
+                source.sendFailure(Component.translatable("chrono_vault.command.restore.failed_null_result"));
                 return;
             }
 
-            source.sendSuccess(() -> Component.literal(
-                    String.format("恢复完成！新世界: %s (路径: %s)",
-                            result.targetWorldName(),
-                            result.targetWorldPath())
+            source.sendSuccess(() -> Component.translatable("chrono_vault.command.restore.success",
+                    result.targetWorldName(),
+                    result.targetWorldPath()
             ), true);
         }));
 
