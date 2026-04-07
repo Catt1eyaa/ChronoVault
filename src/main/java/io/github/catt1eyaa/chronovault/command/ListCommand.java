@@ -46,7 +46,7 @@ public class ListCommand {
         Path snapshotsDir = backupDir.resolve("snapshots");
 
         if (!Files.exists(snapshotsDir)) {
-            source.sendSuccess(() -> Component.literal("没有找到任何快照"), false);
+            source.sendSuccess(() -> Component.translatable("chrono_vault.command.list.no_snapshots"), false);
             return 0;
         }
 
@@ -54,22 +54,23 @@ public class ListCommand {
         try {
             snapshots = ManifestSerializer.loadAllSnapshots(snapshotsDir);
         } catch (IOException e) {
-            source.sendFailure(Component.literal("读取快照列表失败: " + e.getMessage()));
+            source.sendFailure(Component.translatable("chrono_vault.command.list.load_failed", e.getMessage()));
             return 0;
         }
 
         if (snapshots.isEmpty()) {
-            source.sendSuccess(() -> Component.literal("没有找到任何快照"), false);
+            source.sendSuccess(() -> Component.translatable("chrono_vault.command.list.no_snapshots"), false);
             return 0;
         }
 
-        source.sendSuccess(() -> Component.literal("=== ChronoVault 快照列表 ==="), false);
-        source.sendSuccess(() -> Component.literal(String.format("共 %d 个快照:", snapshots.size())), false);
+        source.sendSuccess(() -> Component.translatable("chrono_vault.command.list.header"), false);
+        source.sendSuccess(() -> Component.translatable("chrono_vault.command.list.count", snapshots.size()), false);
 
         for (Manifest manifest : snapshots.values()) {
-            String line = String.format("  %s - %s",
-                    manifest.snapshotId(),
-                    manifest.description().isEmpty() ? "(无描述)" : manifest.description());
+            String description = manifest.description().isEmpty() 
+                    ? Component.translatable("chrono_vault.command.list.no_description").getString() 
+                    : manifest.description();
+            String line = String.format("  %s - %s", manifest.snapshotId(), description);
             source.sendSuccess(() -> Component.literal(line), false);
         }
 
