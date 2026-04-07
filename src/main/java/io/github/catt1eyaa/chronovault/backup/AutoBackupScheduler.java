@@ -17,14 +17,15 @@
 
 package io.github.catt1eyaa.chronovault.backup;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.Objects;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 /**
  * 自动备份调度器
@@ -41,7 +42,7 @@ import java.util.logging.Logger;
  */
 public class AutoBackupScheduler {
 
-    private static final Logger LOGGER = Logger.getLogger(AutoBackupScheduler.class.getName());
+    private static final Logger LOGGER = LoggerFactory.getLogger(AutoBackupScheduler.class);
 
     private final BackupCoordinator coordinator;
     private final int intervalMinutes;
@@ -74,12 +75,12 @@ public class AutoBackupScheduler {
         }
 
         if (!running.compareAndSet(false, true)) {
-            LOGGER.warning("AutoBackupScheduler is already running");
+            LOGGER.warn("AutoBackupScheduler is already running");
             return;
         }
 
         if (scheduler != null && !scheduler.isShutdown()) {
-            LOGGER.warning("AutoBackupScheduler scheduler already initialized");
+            LOGGER.warn("AutoBackupScheduler scheduler already initialized");
             return;
         }
 
@@ -104,7 +105,7 @@ public class AutoBackupScheduler {
      */
     public void stop() {
         if (!running.compareAndSet(true, false)) {
-            LOGGER.warning("AutoBackupScheduler is not running");
+            LOGGER.warn("AutoBackupScheduler is not running");
             return;
         }
 
@@ -158,10 +159,10 @@ public class AutoBackupScheduler {
                         result.stats().durationMs()
                 ));
             } else {
-                LOGGER.severe(() -> "Auto backup failed: " + String.join("; ", result.errors()));
+                LOGGER.error("Auto backup failed: {}", String.join("; ", result.errors()));
             }
         } catch (Exception e) {
-            LOGGER.log(Level.SEVERE, "Auto backup encountered an error", e);
+            LOGGER.error("Auto backup encountered an error", e);
         }
     }
 }

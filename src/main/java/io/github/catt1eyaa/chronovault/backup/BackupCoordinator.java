@@ -22,6 +22,8 @@ import io.github.catt1eyaa.chronovault.storage.BackupPathResolver;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.level.storage.LevelResource;
 import net.minecraft.world.level.storage.LevelStorageSource;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.file.FileStore;
@@ -35,8 +37,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import java.util.stream.Stream;
 
 /**
@@ -58,7 +58,7 @@ import java.util.stream.Stream;
  */
 public class BackupCoordinator {
 
-    private static final Logger LOGGER = Logger.getLogger(BackupCoordinator.class.getName());
+    private static final Logger LOGGER = LoggerFactory.getLogger(BackupCoordinator.class);
 
     /**
      * 磁盘空间缓冲区大小（128MB）
@@ -141,7 +141,7 @@ public class BackupCoordinator {
         }
 
         if (!backupInProgress.compareAndSet(false, true)) {
-            LOGGER.warning("Backup already in progress, skipping");
+            LOGGER.warn("Backup already in progress, skipping");
             return BackupResult.failure(
                     new BackupResult.BackupStats(0, 0, 0, 0, 0, 0, 0),
                     List.of("Another backup is already in progress")
@@ -231,7 +231,7 @@ public class BackupCoordinator {
             return result;
 
         } catch (Exception e) {
-            LOGGER.log(Level.SEVERE, "Backup failed with exception", e);
+            LOGGER.error("Backup failed with exception", e);
             return BackupResult.failure(
                     new BackupResult.BackupStats(0, 0, 0, 0, 0, 0, 0),
                     List.of("Backup failed: " + e.getMessage())
@@ -290,17 +290,15 @@ public class BackupCoordinator {
             long usableSpace = fileStore.getUsableSpace();
 
             if (usableSpace < DISK_SPACE_BUFFER) {
-                LOGGER.warning(() -> String.format(
-                        "Insufficient disk space: %.2f MB available, %.2f MB required",
+                LOGGER.warn("Insufficient disk space: {:.2f} MB available, {:.2f} MB required",
                         usableSpace / 1024.0 / 1024.0,
-                        DISK_SPACE_BUFFER / 1024.0 / 1024.0
-                ));
+                        DISK_SPACE_BUFFER / 1024.0 / 1024.0);
                 return false;
             }
 
             return true;
         } catch (IOException e) {
-            LOGGER.log(Level.WARNING, "Failed to check disk space", e);
+            LOGGER.warn("Failed to check disk space", e);
             // 如果无法检查，继续执行备份
             return true;
         }
@@ -334,14 +332,14 @@ public class BackupCoordinator {
                     Files.delete(snapshot);
                     LOGGER.info(() -> "Deleted old snapshot: " + snapshot.getFileName());
                 } catch (IOException e) {
-                    LOGGER.log(Level.WARNING, "Failed to delete old snapshot: " + snapshot, e);
+                    LOGGER.warn("Failed to delete old snapshot: {}", snapshot, e);
                 }
             }
 
             LOGGER.info(() -> String.format("Cleaned up %d old snapshots", toDelete.size()));
 
         } catch (IOException e) {
-            LOGGER.log(Level.WARNING, "Failed to cleanup old snapshots", e);
+            LOGGER.warn("Failed to cleanup old snapshots", e);
         }
     }
 }

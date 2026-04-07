@@ -18,11 +18,11 @@
 package io.github.catt1eyaa.chronovault.backup;
 
 import net.minecraft.server.MinecraftServer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 /**
  * 世界状态管理器
@@ -40,7 +40,7 @@ import java.util.logging.Logger;
  */
 public class WorldStateManager {
 
-    private static final Logger LOGGER = Logger.getLogger(WorldStateManager.class.getName());
+    private static final Logger LOGGER = LoggerFactory.getLogger(WorldStateManager.class);
 
     private final MinecraftServer server;
     private final AtomicBoolean prepared;
@@ -64,11 +64,11 @@ public class WorldStateManager {
      */
     public void prepareForBackup() {
         if (prepared.get()) {
-            LOGGER.warning("Already in backup state, skipping prepare");
+            LOGGER.warn("Already in backup state, skipping prepare");
             return;
         }
 
-        LOGGER.fine("Preparing for backup: saving world and disabling auto-save");
+        LOGGER.debug("Preparing for backup: saving world and disabling auto-save");
 
         try {
             server.executeBlocking(() -> {
@@ -78,16 +78,16 @@ public class WorldStateManager {
                 server.getAllLevels().forEach(level -> level.noSave = true);
             });
             prepared.set(true);
-            LOGGER.fine("Backup preparation complete");
+            LOGGER.debug("Backup preparation complete");
         } catch (Exception e) {
             // 如果保存失败，尝试恢复自动保存
-            LOGGER.log(Level.SEVERE, "Failed to prepare for backup", e);
+            LOGGER.error("Failed to prepare for backup", e);
             try {
                 server.executeBlocking(() ->
                     server.getAllLevels().forEach(level -> level.noSave = false)
                 );
             } catch (Exception rollbackError) {
-                LOGGER.log(Level.SEVERE, "Failed to rollback auto-save state", rollbackError);
+                LOGGER.error("Failed to rollback auto-save state", rollbackError);
             }
             throw new RuntimeException("Failed to prepare for backup", e);
         }
@@ -100,20 +100,20 @@ public class WorldStateManager {
      */
     public void finishBackup() {
         if (!prepared.get()) {
-            LOGGER.warning("Not in backup state, skipping finish");
+            LOGGER.warn("Not in backup state, skipping finish");
             return;
         }
 
-        LOGGER.fine("Finishing backup: re-enabling auto-save");
+        LOGGER.debug("Finishing backup: re-enabling auto-save");
 
         try {
             server.executeBlocking(() ->
                 server.getAllLevels().forEach(level -> level.noSave = false)
             );
             prepared.set(false);
-            LOGGER.fine("Backup finished, auto-save re-enabled");
+            LOGGER.debug("Backup finished, auto-save re-enabled");
         } catch (Exception e) {
-            LOGGER.log(Level.SEVERE, "Failed to re-enable auto-save", e);
+            LOGGER.error("Failed to re-enable auto-save", e);
             // 即使失败也标记为未准备状态，避免死锁
             prepared.set(false);
             throw new RuntimeException("Failed to finish backup", e);
