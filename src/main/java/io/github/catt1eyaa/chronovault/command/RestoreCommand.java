@@ -111,7 +111,7 @@ public class RestoreCommand {
 
             source.sendSuccess(() -> Component.translatable("chrono_vault.command.restore.success",
                     result.targetWorldName(),
-                    result.targetWorldPath()
+                    result.targetWorldPath().toString()
             ), true);
         }));
 
