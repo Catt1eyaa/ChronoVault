@@ -90,7 +90,7 @@ public class AutoBackupScheduler {
             return t;
         });
 
-        LOGGER.info(() -> String.format("Scheduling automatic backups every %d minutes", intervalMinutes));
+        LOGGER.info("Scheduling automatic backups every {} minutes", intervalMinutes);
 
         scheduledTask = scheduler.scheduleAtFixedRate(
                 this::executeAutoBackup,
@@ -150,14 +150,15 @@ public class AutoBackupScheduler {
             BackupResult result = coordinator.backupSync("Auto backup", null);
 
             if (result.success()) {
-                LOGGER.info(() -> String.format(
-                        "Auto backup completed: %s (files: %d, regions: %d, chunks: %d, time: %dms)",
-                        result.snapshotId(),
-                        result.stats().totalFiles(),
-                        result.stats().totalRegions(),
-                        result.stats().totalChunks(),
-                        result.stats().durationMs()
-                ));
+                if (LOGGER.isInfoEnabled()) {
+                    LOGGER.info("Auto backup completed: {} (files: {}, regions: {}, chunks: {}, time: {}ms)",
+                            result.snapshotId(),
+                            result.stats().totalFiles(),
+                            result.stats().totalRegions(),
+                            result.stats().totalChunks(),
+                            result.stats().durationMs()
+                    );
+                }
             } else {
                 LOGGER.error("Auto backup failed: {}", String.join("; ", result.errors()));
             }

@@ -330,13 +330,13 @@ public class BackupCoordinator {
             for (Path snapshot : toDelete) {
                 try {
                     Files.delete(snapshot);
-                    LOGGER.info(() -> "Deleted old snapshot: " + snapshot.getFileName());
+                    LOGGER.info("Deleted old snapshot: {}", snapshot.getFileName());
                 } catch (IOException e) {
                     LOGGER.warn("Failed to delete old snapshot: {}", snapshot, e);
                 }
             }
 
-            LOGGER.info(() -> String.format("Cleaned up %d old snapshots", toDelete.size()));
+            LOGGER.info("Cleaned up {} old snapshots", toDelete.size());
 
         } catch (IOException e) {
             LOGGER.warn("Failed to cleanup old snapshots", e);
