@@ -53,23 +53,26 @@ public class InfoCommand {
         try {
             manifest = ManifestSerializer.load(manifestPath);
         } catch (IOException e) {
-            source.sendFailure(Component.literal("无法加载快照 '" + snapshotId + "': " + e.getMessage()));
+            source.sendFailure(Component.translatable("chrono_vault.command.info.load_failed", snapshotId, e.getMessage()));
             return 0;
         }
 
         ManifestStats stats = manifest.getStats();
         String timestamp = formatTimestamp(manifest.timestamp());
+        String description = manifest.description().isEmpty() 
+                ? Component.translatable("chrono_vault.command.info.description_none").getString() 
+                : manifest.description();
 
-        source.sendSuccess(() -> Component.literal("=== 快照信息 ==="), false);
-        source.sendSuccess(() -> Component.literal("  ID: " + manifest.snapshotId()), false);
-        source.sendSuccess(() -> Component.literal("  时间: " + timestamp), false);
-        source.sendSuccess(() -> Component.literal("  版本: " + manifest.gameVersion()), false);
-        source.sendSuccess(() -> Component.literal("  描述: " + (manifest.description().isEmpty() ? "(无)" : manifest.description())), false);
-        source.sendSuccess(() -> Component.literal("  文件数: " + stats.fileCount()), false);
-        source.sendSuccess(() -> Component.literal("  Region 数: " + stats.regionCount()), false);
-        source.sendSuccess(() -> Component.literal("  Chunk 数: " + stats.totalChunks()), false);
-        source.sendSuccess(() -> Component.literal("  非空 Chunk: " + stats.nonEmptyChunks()), false);
-        source.sendSuccess(() -> Component.literal("  唯一对象数: " + stats.uniqueObjects()), false);
+        source.sendSuccess(() -> Component.translatable("chrono_vault.command.info.header"), false);
+        source.sendSuccess(() -> Component.translatable("chrono_vault.command.info.id", manifest.snapshotId()), false);
+        source.sendSuccess(() -> Component.translatable("chrono_vault.command.info.timestamp", timestamp), false);
+        source.sendSuccess(() -> Component.translatable("chrono_vault.command.info.version", manifest.gameVersion()), false);
+        source.sendSuccess(() -> Component.translatable("chrono_vault.command.info.description", description), false);
+        source.sendSuccess(() -> Component.translatable("chrono_vault.command.info.file_count", stats.fileCount()), false);
+        source.sendSuccess(() -> Component.translatable("chrono_vault.command.info.region_count", stats.regionCount()), false);
+        source.sendSuccess(() -> Component.translatable("chrono_vault.command.info.chunk_count", stats.totalChunks()), false);
+        source.sendSuccess(() -> Component.translatable("chrono_vault.command.info.non_empty_chunks", stats.nonEmptyChunks()), false);
+        source.sendSuccess(() -> Component.translatable("chrono_vault.command.info.unique_objects", stats.uniqueObjects()), false);
 
         return 1;
     }
