@@ -6,7 +6,7 @@ A Minecraft 1.21.1 NeoForge mod providing git-like backup for worlds.
 
 This project was developed using [OpenCode](https://github.com/anomalyco/opencode) with:
 - **SpecDD** (Specification-Driven Development) — for feature design and planning
-- **Superpowers** (obra/superpowers) — for [TDD](https://github.com/obra/superpowers)-based code implementation
+- **[Superpowers](https://github.com/obra/superpowers)** (obra/superpowers) — for TDD-based code implementation
 
 ## Features
 
