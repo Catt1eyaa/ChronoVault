@@ -1,4 +1,4 @@
-# ChronoVault
+# ChronoVault (**Status: Unmaintained**)
 
 A Minecraft 1.21.1 NeoForge mod providing git-like backup for worlds.
 
